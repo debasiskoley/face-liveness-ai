@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Viewfinder corner brackets -->
+    <!-- Top-Left -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M28,38 L28,28 L38,28"
+        android:strokeWidth="3"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Top-Right -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M80,38 L80,28 L70,28"
+        android:strokeWidth="3"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Bottom-Left -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M28,70 L28,80 L38,80"
+        android:strokeWidth="3"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Bottom-Right -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M80,70 L80,80 L70,80"
+        android:strokeWidth="3"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Face Oval Outline -->
+    <path
+        android:fillColor="#1500E5FF"
+        android:pathData="M54,32 C43,32 37,42 37,55 C37,68 45,76 54,76 C63,76 71,68 71,55 C71,42 65,32 54,32 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#FFFFFF" />
+
+    <!-- Eyebrows / Eyes -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44,48 L50,48 M58,48 L64,48"
+        android:strokeWidth="2.2"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round" />
+    <!-- Eye Landmark Nodes -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M47,52m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M61,52m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+
+    <!-- Nose Landmark -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,54 L52,60 L56,60"
+        android:strokeWidth="1.8"
+        android:strokeColor="#A5F3FC"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Smile / Liveness Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M47,66 C50,70 58,70 61,66"
+        android:strokeWidth="2.2"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round" />
+
+    <!-- Horizontal Laser Scan Line across center -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M31,54 L77,54"
+        android:strokeWidth="1.5"
+        android:strokeColor="#22D3EE"
+        android:strokeAlpha="0.7" />
+
+    <!-- Verified Shield / Checkmark Badge -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M71,69 L79,64 L87,69 L87,76 C87,81 83,85 79,87 C75,85 71,81 71,76 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M75,76 L78,79 L83,73"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
+
