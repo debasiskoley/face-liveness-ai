@@ -32,7 +32,7 @@ import java.nio.ByteOrder
 import kotlin.math.sqrt
 
 /**
- * Offline ArcFace identity embedder using InsightFace ONNX weights (`w600k_mbf.onnx`).
+ * Offline ArcFace identity embedder using ONNX weights (`w600k_mbf.onnx`).
  *
  * Input is a 112×112 RGB face, NCHW, (pixel - 127.5) / 127.5. Output is L2-normalized 512-D.
  * MediaPipe is not used for identity — only for liveness in the rest of the app.
@@ -300,12 +300,12 @@ class ArcFaceEmbedder private constructor(context: Context) {
         private const val GRID = 8
         private const val LBP_BINS = 10
         private const val FALLBACK_EMBED_SIZE = GRID * GRID * LBP_BINS + GRID * GRID * 3
-        /** Yakhyo / InsightFace 1:N cosine threshold. */
+        /** 1:N cosine similarity match threshold. */
         private const val ONNX_MATCH_THRESHOLD = 0.40f
         private const val FALLBACK_MATCH_THRESHOLD = 0.72f
         private const val CROP_MARGIN = 0.22f
 
-        /** InsightFace ArcFace 5-point template for 112×112 (src[:,0] += 8). */
+        /** ArcFace 5-point alignment template for 112×112 (src[:,0] += 8). */
         private val ARC_FACE_DST = listOf(
             PointF(38.2946f, 51.6963f),
             PointF(73.5318f, 51.5014f),
@@ -379,7 +379,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
                 val inName = session.inputNames.first()
                 val inInfo = session.inputInfo[inName]?.info as? TensorInfo
                 val inShape = inInfo?.shape ?: longArrayOf(1, 3, 112, 112)
-                // InsightFace w600k_* is always NCHW RGB 112. Dynamic dims can look like -1/0.
+                // w600k_* ArcFace is always NCHW RGB 112. Dynamic dims can look like -1/0.
                 val nchw = !(inShape.size >= 4 && inShape[3] == 3L && inShape[1] != 3L)
                 val size = 112
                 val outName = session.outputNames.first()

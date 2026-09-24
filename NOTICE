@@ -1,0 +1,22 @@
+Face Liveness AI
+Copyright 2026 Debasis Koley
+
+This product includes software developed for on-device face liveness,
+anti-spoofing, and identity matching.
+
+Third-party components (see also README.md):
+
+- MediaPipe Tasks Vision — Apache License 2.0
+  https://github.com/google-ai-edge/mediapipe
+
+- Google ML Kit Face Detection — Google ML Kit Terms of Service
+  https://developers.google.com/ml-kit/terms
+
+- ONNX Runtime — MIT License
+  https://github.com/microsoft/onnxruntime
+
+- MiniFASNetV2 / Silent-Face-Anti-Spoofing (open-source) — Apache License 2.0
+  https://github.com/minivision-ai/Silent-Face-Anti-Spoofing
+
+- ArcFace ONNX weights (`w600k_mbf.onnx`) — subject to the upstream
+  model / weight license; not relicensed by this NOTICE.

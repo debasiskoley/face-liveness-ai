@@ -17,7 +17,7 @@ import java.util.UUID
 
 /**
  * Loads and saves enrolled profile pictures, then extracts an identity template
- * from the photo (InsightFace ArcFace ONNX when bundled).
+ * from the photo (ArcFace ONNX when bundled).
  */
 object ProfileBiometricHelper {
     private const val TAG = "ProfileBiometricHelper"
