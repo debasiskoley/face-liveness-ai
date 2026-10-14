@@ -5,6 +5,8 @@ import com.example.data.remote.EmployeeFaceResponse
 import com.example.data.remote.EnrollFaceRequest
 import com.example.data.remote.EnrollFaceResponse
 import com.example.data.remote.FacePayload
+import com.example.data.remote.GateDto
+import com.example.data.remote.RegisterDeviceRequest
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -58,6 +60,32 @@ class EnrollFaceRequestJsonTest {
         .fromJson("""{"message":"Employee dosent exist"}""")!!
 
     assertEquals("Employee dosent exist", error.message)
+  }
+
+  @Test
+  fun `register device request includes the required device name`() {
+    val json = moshi.adapter(RegisterDeviceRequest::class.java).toJson(
+        RegisterDeviceRequest(deviceId = "abc123", deviceName = "LENOVO TB-7306F", gateId = 1, gateName = "Gate 1")
+    )
+
+    assertEquals(
+        """{"deviceId":"abc123","deviceName":"LENOVO TB-7306F","gateId":1,"gateName":"Gate 1"}""",
+        json
+    )
+  }
+
+  @Test
+  fun `gates and validation errors parse`() {
+    val gates = moshi.adapter<List<GateDto>>(
+        com.squareup.moshi.Types.newParameterizedType(List::class.java, GateDto::class.java)
+    ).fromJson("""[{"gateId":1,"gateName":"Gate 1","status":true}]""")!!
+    assertEquals(1, gates.single().gateId)
+
+    val problem = moshi.adapter(ApiErrorResponse::class.java).fromJson(
+        """{"title":"One or more validation errors occurred.","status":400,""" +
+            """"errors":{"DeviceName":["The DeviceName field is required."]}}"""
+    )!!
+    assertEquals("The DeviceName field is required.", problem.errors?.values?.flatten()?.first())
   }
 
   @Test

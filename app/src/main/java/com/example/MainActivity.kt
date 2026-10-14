@@ -42,6 +42,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +60,7 @@ import com.example.ui.EnrollFaceScreen
 import com.example.ui.HomeScreen
 import com.example.ui.MobileAction
 import com.example.ui.MobileNumberDialog
+import com.example.ui.RegisterDeviceDialog
 import com.example.ui.SettingsScreen
 import com.example.ui.SplashScreen
 import com.example.ui.VerificationSuccessScreen
@@ -65,14 +68,17 @@ import com.example.ui.WelcomeScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.AppTab
+import com.example.viewmodel.DeviceRegistrationViewModel
 import com.example.viewmodel.EnrollFaceViewModel
 import com.example.viewmodel.FaceLivenessViewModel
 import com.example.viewmodel.LoginEvent
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: FaceLivenessViewModel by viewModels()
     private val enrollViewModel: EnrollFaceViewModel by viewModels()
+    private val deviceViewModel: DeviceRegistrationViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +89,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MyApplicationTheme {
-                FaceLivenessRoot(viewModel = viewModel, enrollViewModel = enrollViewModel)
+                FaceLivenessRoot(
+                    viewModel = viewModel,
+                    enrollViewModel = enrollViewModel,
+                    deviceViewModel = deviceViewModel
+                )
             }
         }
     }
@@ -99,12 +109,17 @@ private enum class AppRoute {
 @Composable
 fun FaceLivenessRoot(
     viewModel: FaceLivenessViewModel,
-    enrollViewModel: EnrollFaceViewModel
+    enrollViewModel: EnrollFaceViewModel,
+    deviceViewModel: DeviceRegistrationViewModel
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val deviceState by deviceViewModel.uiState.collectAsState()
     var route by rememberSaveable { mutableStateOf(AppRoute.SPLASH) }
     var mobileAction by rememberSaveable { mutableStateOf<MobileAction?>(null) }
+    var showRegisterDevice by rememberSaveable { mutableStateOf(false) }
+    var checkingDevice by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var enrollMobile by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(viewModel) {
@@ -123,10 +138,39 @@ fun FaceLivenessRoot(
         AppRoute.SPLASH -> SplashScreen(onFinished = { route = AppRoute.WELCOME })
 
         AppRoute.WELCOME -> {
+            LaunchedEffect(Unit) { deviceViewModel.refreshRegistration() }
             WelcomeScreen(
-                onLoginWithFace = { mobileAction = MobileAction.LOGIN_WITH_FACE },
-                onEnrollFace = { mobileAction = MobileAction.ENROLL_FACE }
+                onLoginWithFace = {
+                    if (!checkingDevice) {
+                        checkingDevice = true
+                        scope.launch {
+                            val registered = deviceViewModel.refreshRegistration()
+                            checkingDevice = false
+                            if (registered) {
+                                mobileAction = MobileAction.LOGIN_WITH_FACE
+                            } else {
+                                Toast.makeText(context, "Register device before login", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                },
+                isCheckingDevice = checkingDevice,
+                onEnrollFace = { mobileAction = MobileAction.ENROLL_FACE },
+                onRegisterDevice = {
+                    deviceViewModel.open()
+                    showRegisterDevice = true
+                },
+                registeredGateName = deviceState.registeredGate?.gateName
             )
+            if (showRegisterDevice) {
+                RegisterDeviceDialog(
+                    state = deviceState,
+                    onSelectGate = deviceViewModel::selectGate,
+                    onRegister = deviceViewModel::register,
+                    onRetryLoad = deviceViewModel::loadGates,
+                    onDismiss = { showRegisterDevice = false }
+                )
+            }
             mobileAction?.let { action ->
                 MobileNumberDialog(
                     action = action,

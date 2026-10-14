@@ -16,6 +16,8 @@ object ApiClient {
 
     val faceApi: FaceApi by lazy { retrofit.create(FaceApi::class.java) }
 
+    val deviceApi: DeviceApi by lazy { retrofit.create(DeviceApi::class.java) }
+
     private val moshi: Moshi = Moshi.Builder().build()
 
     /** Reads `{"message": "..."}` from an error response, falling back to the raw body text. */
@@ -27,7 +29,12 @@ object ApiClient {
         }?.trim()
         if (body.isNullOrEmpty()) return null
         val parsed = try {
-            moshi.adapter(ApiErrorResponse::class.java).fromJson(body)?.message
+            moshi.adapter(ApiErrorResponse::class.java).fromJson(body)?.let { error ->
+                error.message
+                    ?: error.errors?.values?.flatten()?.firstOrNull()
+                    ?: error.detail
+                    ?: error.title
+            }
         } catch (_: Exception) {
             null
         }

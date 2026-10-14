@@ -1,7 +1,8 @@
 package com.example.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,24 +12,30 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AppRegistration
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,18 +66,76 @@ private const val MOBILE_NUMBER_LENGTH = 10
 
 fun isValidMobileNumber(value: String): Boolean = MOBILE_NUMBER_REGEX.matches(value)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
     onLoginWithFace: () -> Unit,
-    onEnrollFace: () -> Unit
+    onEnrollFace: () -> Unit,
+    onRegisterDevice: () -> Unit = {},
+    registeredGateName: String? = null,
+    isCheckingDevice: Boolean = false
 ) {
-    Box(
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030712))
-            .systemBarsPadding()
-            .padding(24.dp)
             .testTag("welcome_screen"),
+        containerColor = Color(0xFF030712),
+        topBar = {
+            TopAppBar(
+                title = {
+                    if (registeredGateName != null) {
+                        Text(
+                            text = registeredGateName,
+                            fontSize = 13.sp,
+                            color = Color(0xFF10B981)
+                        )
+                    }
+                },
+                actions = {
+                    FilledIconButton(
+                        onClick = onRegisterDevice,
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(52.dp)
+                            .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), CircleShape)
+                            .testTag("register_device_button"),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color(0xFF00E5FF).copy(alpha = 0.15f),
+                            contentColor = Color(0xFF00E5FF)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AppRegistration,
+                            contentDescription = "Register device",
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF030712))
+            )
+        }
+    ) { innerPadding ->
+        WelcomeContent(
+            modifier = Modifier.padding(innerPadding),
+            onLoginWithFace = onLoginWithFace,
+            onEnrollFace = onEnrollFace,
+            isCheckingDevice = isCheckingDevice
+        )
+    }
+}
+
+@Composable
+private fun WelcomeContent(
+    modifier: Modifier,
+    onLoginWithFace: () -> Unit,
+    onEnrollFace: () -> Unit,
+    isCheckingDevice: Boolean
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -107,7 +172,15 @@ fun WelcomeScreen(
                     contentColor = Color(0xFF030712)
                 )
             ) {
-                Icon(imageVector = Icons.Default.Face, contentDescription = null)
+                if (isCheckingDevice) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF030712),
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Icon(imageVector = Icons.Default.Face, contentDescription = null)
+                }
                 Spacer(modifier = Modifier.size(10.dp))
                 Text(text = "Login with Face", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }

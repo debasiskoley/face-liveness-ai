@@ -47,6 +47,35 @@ data class MatchConfigDto(
 )
 
 @JsonClass(generateAdapter = true)
-data class ApiErrorResponse(
+data class GateDto(
+    val gateId: Int,
+    val gateName: String? = null,
+    val status: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class RegisterDeviceRequest(
+    val deviceId: String,
+    val deviceName: String,
+    val gateId: Int,
+    val gateName: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class DeviceResponse(
+    val slno: Int? = null,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val gateId: Int? = null,
+    val gateName: String? = null,
     val message: String? = null
+)
+
+/** Covers both `{"message": ...}` and ASP.NET ProblemDetails / validation error bodies. */
+@JsonClass(generateAdapter = true)
+data class ApiErrorResponse(
+    val message: String? = null,
+    val title: String? = null,
+    val detail: String? = null,
+    val errors: Map<String, List<String>>? = null
 )
