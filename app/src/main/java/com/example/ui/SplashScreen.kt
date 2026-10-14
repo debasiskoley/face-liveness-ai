@@ -1,5 +1,8 @@
 package com.example.ui
 
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +44,7 @@ fun SplashScreen(onFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030712))
+            .background(AppBackground)
             .testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
@@ -55,17 +58,17 @@ fun SplashScreen(onFinished: () -> Unit) {
                 text = "Face Liveness AI",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = AppText
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Secure face attendance",
                 fontSize = 13.sp,
-                color = Color(0xFF94A3B8)
+                color = AppText
             )
             Spacer(modifier = Modifier.height(36.dp))
             CircularProgressIndicator(
-                color = Color(0xFF00E5FF),
+                color = AppText,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(24.dp)
             )
@@ -77,14 +80,14 @@ fun SplashScreen(onFinished: () -> Unit) {
 fun AppLogo(size: Int) {
     Surface(
         shape = CircleShape,
-        color = Color(0xFF00E5FF).copy(alpha = 0.15f),
+        color = AppButton,
         modifier = Modifier.size(size.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = null,
-                tint = Color(0xFF00E5FF),
+                tint = AppText,
                 modifier = Modifier.size((size * 0.55f).dp)
             )
         }

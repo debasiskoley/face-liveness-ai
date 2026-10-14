@@ -1,5 +1,10 @@
 package com.example
 
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -83,8 +88,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         )
 
         setContent {
@@ -272,21 +277,21 @@ fun FaceLivenessApp(
         AppScreen.MAIN_DASHBOARD -> {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = Color(0xFF030712),
+                containerColor = AppBackground,
                 topBar = {
                     TopAppBar(
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = Color(0xFF00E5FF).copy(alpha = 0.15f),
+                                    color = AppButton,
                                     modifier = Modifier.size(34.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = Icons.Default.Security,
                                             contentDescription = null,
-                                            tint = Color(0xFF00E5FF),
+                                            tint = AppText,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -297,7 +302,7 @@ fun FaceLivenessApp(
                                         text = "Face Liveness AI",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = AppText
                                     )
                                     Text(
                                         text = if (uiState.selectedTab == AppTab.HOME) {
@@ -306,7 +311,7 @@ fun FaceLivenessApp(
                                             "Settings"
                                         },
                                         fontSize = 10.sp,
-                                        color = Color(0xFF10B981)
+                                        color = AppText
                                     )
                                 }
                             }
@@ -320,19 +325,19 @@ fun FaceLivenessApp(
                                     Icon(
                                         imageVector = Icons.Default.FlipCameraAndroid,
                                         contentDescription = "Switch Camera Facing",
-                                        tint = Color(0xFFE2E8F0)
+                                        tint = AppText
                                     )
                                 }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color(0xFF0B132B)
+                            containerColor = AppSurface
                         )
                     )
                 },
                 bottomBar = {
                     NavigationBar(
-                        containerColor = Color(0xFF0B132B),
+                        containerColor = AppSurface,
                         tonalElevation = 8.dp,
                         modifier = Modifier.testTag("bottom_nav_bar")
                     ) {
@@ -347,11 +352,11 @@ fun FaceLivenessApp(
                             },
                             label = { Text("Home") },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color(0xFF00E5FF),
-                                selectedTextColor = Color(0xFF00E5FF),
-                                indicatorColor = Color(0xFF0F2238),
-                                unselectedIconColor = Color(0xFF64748B),
-                                unselectedTextColor = Color(0xFF64748B)
+                                selectedIconColor = AppText,
+                                selectedTextColor = AppText,
+                                indicatorColor = AppButton,
+                                unselectedIconColor = AppTextMuted,
+                                unselectedTextColor = AppTextMuted
                             ),
                             modifier = Modifier.testTag("tab_home")
                         )
@@ -367,11 +372,11 @@ fun FaceLivenessApp(
                             },
                             label = { Text("Settings") },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color(0xFF00E5FF),
-                                selectedTextColor = Color(0xFF00E5FF),
-                                indicatorColor = Color(0xFF0F2238),
-                                unselectedIconColor = Color(0xFF64748B),
-                                unselectedTextColor = Color(0xFF64748B)
+                                selectedIconColor = AppText,
+                                selectedTextColor = AppText,
+                                indicatorColor = AppButton,
+                                unselectedIconColor = AppTextMuted,
+                                unselectedTextColor = AppTextMuted
                             ),
                             modifier = Modifier.testTag("tab_settings")
                         )

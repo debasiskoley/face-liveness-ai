@@ -1,5 +1,12 @@
 package com.example.ui
 
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,9 +60,9 @@ fun RegisterDeviceDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        containerColor = Color(0xFF0B132B),
-        titleContentColor = Color.White,
-        textContentColor = Color(0xFFCBD5E1),
+        containerColor = AppSurface,
+        titleContentColor = AppText,
+        textContentColor = AppText,
         modifier = Modifier.testTag("register_device_dialog"),
         title = { Text(text = "Register Device", fontWeight = FontWeight.Bold) },
         text = {
@@ -74,10 +81,10 @@ fun RegisterDeviceDialog(
                 )
 
                 state.successMessage?.let {
-                    StatusMessage(text = it, color = Color(0xFF10B981), isError = false)
+                    StatusMessage(text = it, color = AppSuccess, isError = false)
                 }
                 state.errorMessage?.let {
-                    StatusMessage(text = it, color = Color(0xFFEF4444), isError = true)
+                    StatusMessage(text = it, color = AppError, isError = true)
                 }
             }
         },
@@ -86,8 +93,8 @@ fun RegisterDeviceDialog(
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00E5FF),
-                        contentColor = Color(0xFF030712)
+                        containerColor = AppButton,
+                        contentColor = AppText
                     )
                 ) {
                     Text(text = "Done", fontWeight = FontWeight.Bold)
@@ -96,8 +103,8 @@ fun RegisterDeviceDialog(
                 Button(
                     onClick = onRetryLoad,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00E5FF),
-                        contentColor = Color(0xFF030712)
+                        containerColor = AppButton,
+                        contentColor = AppText
                     )
                 ) {
                     Text(text = "Retry", fontWeight = FontWeight.Bold)
@@ -108,13 +115,13 @@ fun RegisterDeviceDialog(
                     enabled = state.canRegister,
                     modifier = Modifier.testTag("enroll_device_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00E5FF),
-                        contentColor = Color(0xFF030712)
+                        containerColor = AppButton,
+                        contentColor = AppText
                     )
                 ) {
                     if (busy) {
                         CircularProgressIndicator(
-                            color = Color(0xFF00E5FF),
+                            color = AppText,
                             strokeWidth = 2.dp,
                             modifier = Modifier.size(18.dp)
                         )
@@ -127,7 +134,7 @@ fun RegisterDeviceDialog(
         dismissButton = {
             if (state.successMessage == null) {
                 TextButton(onClick = onDismiss, enabled = !busy) {
-                    Text(text = "Cancel", color = Color(0xFF94A3B8))
+                    Text(text = "Cancel", color = AppTextMuted)
                 }
             }
         }
@@ -163,7 +170,7 @@ private fun GateDropdown(
             trailingIcon = {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        color = Color(0xFF00E5FF),
+                        color = AppText,
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(18.dp)
                     )
@@ -177,29 +184,29 @@ private fun GateDropdown(
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled)
                 .testTag("gate_dropdown"),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                disabledTextColor = Color(0xFF94A3B8),
-                focusedBorderColor = Color(0xFF00E5FF),
-                unfocusedBorderColor = Color(0xFF334155),
-                disabledBorderColor = Color(0xFF1E293B),
-                focusedLabelColor = Color(0xFF00E5FF),
-                unfocusedLabelColor = Color(0xFF94A3B8),
-                disabledLabelColor = Color(0xFF64748B),
-                focusedTrailingIconColor = Color(0xFF00E5FF),
-                unfocusedTrailingIconColor = Color(0xFF94A3B8),
-                focusedPlaceholderColor = Color(0xFF64748B),
-                unfocusedPlaceholderColor = Color(0xFF64748B)
+                focusedTextColor = AppText,
+                unfocusedTextColor = AppText,
+                disabledTextColor = AppTextMuted,
+                focusedBorderColor = AppButton,
+                unfocusedBorderColor = AppBorder,
+                disabledBorderColor = AppBorder,
+                focusedLabelColor = AppText,
+                unfocusedLabelColor = AppTextMuted,
+                disabledLabelColor = AppTextMuted,
+                focusedTrailingIconColor = AppButton,
+                unfocusedTrailingIconColor = AppTextMuted,
+                focusedPlaceholderColor = AppTextMuted,
+                unfocusedPlaceholderColor = AppTextMuted
             )
         )
         ExposedDropdownMenu(
             expanded = expanded && enabled,
             onDismissRequest = { expanded = false },
-            containerColor = Color(0xFF111C36)
+            containerColor = AppSurface
         ) {
             gates.forEach { gate ->
                 DropdownMenuItem(
-                    text = { Text(text = gateLabel(gate), color = Color.White) },
+                    text = { Text(text = gateLabel(gate), color = AppText) },
                     onClick = {
                         onSelect(gate.gateId)
                         expanded = false
@@ -214,9 +221,9 @@ private fun GateDropdown(
 @Composable
 private fun InfoLine(label: String, value: String) {
     Column {
-        Text(text = label, fontSize = 12.sp, color = Color(0xFF94A3B8))
+        Text(text = label, fontSize = 12.sp, color = AppTextMuted)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = AppText)
     }
 }
 

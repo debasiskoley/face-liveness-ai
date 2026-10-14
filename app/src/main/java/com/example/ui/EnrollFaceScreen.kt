@@ -1,5 +1,15 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
+import com.example.ui.theme.AppWarning
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -86,7 +96,7 @@ fun EnrollFaceScreen(
         modifier = Modifier
             .fillMaxSize()
             .testTag("enroll_face_screen"),
-        containerColor = Color(0xFF030712),
+        containerColor = AppBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -95,12 +105,12 @@ fun EnrollFaceScreen(
                             text = "Enroll Face",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = AppText
                         )
                         Text(
                             text = "+91 $mobileNumber",
                             fontSize = 11.sp,
-                            color = Color(0xFF10B981)
+                            color = AppText
                         )
                     }
                 },
@@ -109,11 +119,11 @@ fun EnrollFaceScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFFE2E8F0)
+                            tint = AppText
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0B132B))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
         }
     ) { innerPadding ->
@@ -129,7 +139,7 @@ fun EnrollFaceScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0B132B)),
+                    .background(AppSurface),
                 contentAlignment = Alignment.Center
             ) {
                 if (hasCameraPermission) {
@@ -160,15 +170,15 @@ fun EnrollFaceScreen(
                     .testTag("capture_enroll_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00E5FF),
-                    contentColor = Color(0xFF030712),
-                    disabledContainerColor = Color(0xFF1E293B),
-                    disabledContentColor = Color(0xFF64748B)
+                    containerColor = AppButton,
+                    contentColor = AppText,
+                    disabledContainerColor = AppBorder.copy(alpha = 0.35f),
+                    disabledContentColor = AppText.copy(alpha = 0.6f)
                 )
             ) {
                 if (uiState.isSubmitting) {
                     CircularProgressIndicator(
-                        color = Color(0xFF00E5FF),
+                        color = AppText,
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(20.dp)
                     )
@@ -196,12 +206,12 @@ fun EnrollFaceScreen(
 private fun EnrollStatusCard(uiState: EnrollFaceUiState) {
     val error = uiState.errorMessage
     val (message, color) = when {
-        error != null -> error to Color(0xFFEF4444)
-        uiState.isSubmitting -> "Creating face template and sending to server…" to Color(0xFF00E5FF)
-        !uiState.metrics.hasFace -> "Position your face inside the frame" to Color(0xFF94A3B8)
+        error != null -> error to AppError
+        uiState.isSubmitting -> "Creating face template and sending to server…" to AppText
+        !uiState.metrics.hasFace -> "Position your face inside the frame" to AppTextMuted
         uiState.spoofResult.riskLevel == SpoofRiskLevel.HIGH ->
-            (uiState.spoofResult.detectionNotes.firstOrNull() ?: "Possible spoof detected") to Color(0xFFF59E0B)
-        else -> "Face detected. Hold still and tap Capture & Enroll" to Color(0xFF10B981)
+            (uiState.spoofResult.detectionNotes.firstOrNull() ?: "Possible spoof detected") to AppWarning
+        else -> "Face detected. Hold still and tap Capture & Enroll" to AppSuccess
     }
 
     Surface(
@@ -209,7 +219,8 @@ private fun EnrollStatusCard(uiState: EnrollFaceUiState) {
             .fillMaxWidth()
             .testTag("enroll_status_card"),
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF0B132B)
+        color = AppSurface,
+        border = BorderStroke(1.dp, AppBorder)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -235,7 +246,7 @@ private fun CameraPermissionMessage(onRequest: () -> Unit) {
     ) {
         Text(
             text = "Camera permission is needed to capture your face.",
-            color = Color(0xFFCBD5E1),
+            color = AppText,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(14.dp))
@@ -251,25 +262,25 @@ private fun EnrollSuccessDialog(
 ) {
     AlertDialog(
         onDismissRequest = {},
-        containerColor = Color(0xFF0B132B),
+        containerColor = AppSurface,
         icon = {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF10B981),
+                tint = AppSuccess,
                 modifier = Modifier.size(40.dp)
             )
         },
-        title = { Text(text = "Face enrolled", color = Color.White, fontWeight = FontWeight.Bold) },
+        title = { Text(text = "Face enrolled", color = AppText, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(text = "Mobile: +91 ${result.mobileNumber ?: mobileNumber}", color = Color(0xFFCBD5E1))
-                result.faceId?.let { Text(text = "Face ID: $it", color = Color(0xFFCBD5E1)) }
-                result.enrolledAt?.let { Text(text = "Enrolled at: $it", color = Color(0xFFCBD5E1)) }
+                Text(text = "Mobile: +91 ${result.mobileNumber ?: mobileNumber}", color = AppText)
+                result.faceId?.let { Text(text = "Face ID: $it", color = AppText) }
+                result.enrolledAt?.let { Text(text = "Enrolled at: $it", color = AppText) }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "You can now use Login with Face.",
-                    color = Color(0xFF94A3B8),
+                    color = AppTextMuted,
                     fontSize = 13.sp
                 )
             }
@@ -279,8 +290,8 @@ private fun EnrollSuccessDialog(
                 onClick = onDone,
                 modifier = Modifier.testTag("enroll_done_button"),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00E5FF),
-                    contentColor = Color(0xFF030712)
+                    containerColor = AppButton,
+                    contentColor = AppText
                 )
             ) {
                 Text(text = "Done", fontWeight = FontWeight.Bold)

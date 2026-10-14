@@ -1,5 +1,13 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -105,7 +113,7 @@ private fun OfficeInIdleFragment(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030712))
+            .background(AppBackground)
             .padding(20.dp)
             .testTag("home_fragment"),
         verticalArrangement = Arrangement.SpaceBetween
@@ -116,29 +124,29 @@ private fun OfficeInIdleFragment(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.sp,
-                color = Color(0xFF00E5FF)
+                color = AppText
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Office Attendance",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = AppText
             )
             Text(
                 text = todayLabel,
                 fontSize = 14.sp,
-                color = Color(0xFF94A3B8)
+                color = AppText
             )
         }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B132B)),
+            colors = CardDefaults.cardColors(containerColor = AppSurface),
             border = CardDefaults.outlinedCardBorder().copy(
                 brush = Brush.horizontalGradient(
-                    listOf(Color(0xFF00E5FF).copy(alpha = 0.7f), Color(0xFF10B981).copy(alpha = 0.4f))
+                    listOf(AppButton.copy(alpha = 0.7f), AppSuccess.copy(alpha = 0.4f))
                 ),
                 width = 1.dp
             )
@@ -152,13 +160,13 @@ private fun OfficeInIdleFragment(
                 Surface(
                     modifier = Modifier.size(84.dp),
                     shape = CircleShape,
-                    color = Color(0xFF00E5FF).copy(alpha = 0.12f)
+                    color = AppButton.copy(alpha = 0.12f)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Login,
                             contentDescription = null,
-                            tint = Color(0xFF00E5FF),
+                            tint = AppButton,
                             modifier = Modifier.size(40.dp)
                         )
                     }
@@ -170,13 +178,13 @@ private fun OfficeInIdleFragment(
                     text = "Mark your attendance",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = AppText
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Office In: MiniFASNet anti-spoof, then MediaPipe center face and blink (mesh clears after live).",
                     fontSize = 13.sp,
-                    color = Color(0xFF94A3B8),
+                    color = AppTextMuted,
                     textAlign = TextAlign.Center,
                     lineHeight = 18.sp
                 )
@@ -196,13 +204,13 @@ private fun OfficeInIdleFragment(
                         .fillMaxWidth()
                         .height(56.dp)
                         .testTag("office_in_button"),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppButton),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Login,
                         contentDescription = null,
-                        tint = Color(0xFF030712),
+                        tint = AppText,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -210,7 +218,7 @@ private fun OfficeInIdleFragment(
                         text = "Office In",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF030712)
+                        color = AppText
                     )
                 }
 
@@ -220,7 +228,7 @@ private fun OfficeInIdleFragment(
                         Icon(
                             imageVector = Icons.Default.Schedule,
                             contentDescription = null,
-                            tint = Color(0xFF10B981),
+                            tint = AppSuccess,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -228,7 +236,7 @@ private fun OfficeInIdleFragment(
                             text = "Last Office In · $lastCheckIn",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF10B981)
+                            color = AppSuccess
                         )
                     }
                 }
@@ -238,7 +246,7 @@ private fun OfficeInIdleFragment(
         Text(
             text = "Camera opens only after you tap Office In.",
             fontSize = 12.sp,
-            color = Color(0xFF64748B),
+            color = AppText,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
@@ -249,14 +257,15 @@ private fun OfficeInIdleFragment(
 private fun StepChip(label: String) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF132037)
+        color = AppSurface,
+        border = BorderStroke(1.dp, AppBorder)
     ) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFE2E8F0)
+            color = AppText
         )
     }
 }
@@ -302,7 +311,7 @@ private fun OfficeInLivenessFragment(
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color(0xCC0B132B)
+                color = AppSurface.copy(alpha = 0.85f)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -311,7 +320,7 @@ private fun OfficeInLivenessFragment(
                     Icon(
                         imageVector = Icons.Default.Visibility,
                         contentDescription = null,
-                        tint = Color(0xFF00E5FF),
+                        tint = AppButton,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -319,7 +328,7 @@ private fun OfficeInLivenessFragment(
                         text = "Office In · Liveness",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = AppText
                     )
                 }
             }
@@ -328,14 +337,14 @@ private fun OfficeInLivenessFragment(
                 onClick = onCancelOfficeIn,
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(Color(0xCC0B132B))
-                    .border(1.dp, Color(0xFF334155), CircleShape)
+                    .background(AppSurface.copy(alpha = 0.85f))
+                    .border(1.dp, AppBorder, CircleShape)
                     .testTag("cancel_office_in_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Cancel Office In",
-                    tint = Color.White
+                    tint = AppText
                 )
             }
         }

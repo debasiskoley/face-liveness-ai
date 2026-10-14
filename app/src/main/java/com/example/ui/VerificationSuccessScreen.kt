@@ -1,5 +1,13 @@
 package com.example.ui
 
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import androidx.compose.foundation.Image
@@ -75,12 +83,11 @@ fun VerificationSuccessScreen(
     val formattedTime = SimpleDateFormat("MMM dd, yyyy · hh:mm:ss a", Locale.getDefault())
         .format(Date(officeInTimestamp ?: System.currentTimeMillis()))
     val matched = identityMatch.isMatch
-    val heroColor = if (matched) Color(0xFF064E3B) else Color(0xFF3F1D1D)
-    val accent = if (matched) Color(0xFF10B981) else Color(0xFFEF4444)
+    val accent = if (matched) AppSuccess else AppError
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFF030712),
+        containerColor = AppBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -89,7 +96,7 @@ fun VerificationSuccessScreen(
                             text = if (matched) "Office In Successful" else "Office In · No Match",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = AppText
                         )
                         Text(
                             text = if (matched) {
@@ -98,7 +105,7 @@ fun VerificationSuccessScreen(
                                 "Liveness passed · Face not enrolled"
                             },
                             fontSize = 11.sp,
-                            color = Color(0xFF10B981)
+                            color = AppText
                         )
                     }
                 },
@@ -110,11 +117,11 @@ fun VerificationSuccessScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = AppText
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0B132B))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
         }
     ) { innerPadding ->
@@ -128,15 +135,11 @@ fun VerificationSuccessScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = heroColor),
+                colors = CardDefaults.cardColors(containerColor = AppSurface),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(
-                        1.5.dp,
-                        Brush.horizontalGradient(listOf(accent, Color(0xFF00E5FF))),
-                        RoundedCornerShape(20.dp)
-                    )
+                    .border(2.dp, accent, RoundedCornerShape(20.dp))
             ) {
                 Column(
                     modifier = Modifier
@@ -167,7 +170,7 @@ fun VerificationSuccessScreen(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
-                        color = Color.White
+                        color = AppText
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -179,7 +182,7 @@ fun VerificationSuccessScreen(
                             "Liveness passed. ${identityMatch.statusLabel}."
                         },
                         fontSize = 12.sp,
-                        color = if (matched) Color(0xFFA7F3D0) else Color(0xFFFECACA),
+                        color = accent,
                         textAlign = TextAlign.Center,
                         lineHeight = 16.sp
                     )
@@ -188,25 +191,25 @@ fun VerificationSuccessScreen(
 
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = if (matched) Color(0xFF047857) else Color(0xFF7F1D1D)
+                        color = accent
                     ) {
                         Text(
                             text = formattedTime,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = AppSurface
                         )
                     }
                 }
             }
 
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                colors = CardDefaults.cardColors(containerColor = AppSurface),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                    .border(1.dp, AppBorder, RoundedCornerShape(20.dp))
             ) {
                 Row(
                     modifier = Modifier
@@ -218,7 +221,7 @@ fun VerificationSuccessScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0B132B)),
+                            .background(AppSurface),
                         contentAlignment = Alignment.Center
                     ) {
                         val photo = identityMatch.profile?.photoUri
@@ -233,7 +236,7 @@ fun VerificationSuccessScreen(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = Color(0xFF94A3B8),
+                                tint = AppTextMuted,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -245,29 +248,29 @@ fun VerificationSuccessScreen(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
-                            color = Color(0xFF00E5FF)
+                            color = AppText
                         )
                         Text(
                             text = identityMatch.profile?.name ?: "No matching enrolled person",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = AppText
                         )
                         Text(
                             text = "Cosine ${"%.3f".format(identityMatch.cosineSimilarity)} · ${identityMatch.matchPercentage}%",
                             fontSize = 12.sp,
-                            color = Color(0xFF94A3B8)
+                            color = AppTextMuted
                         )
                     }
                 }
             }
 
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                colors = CardDefaults.cardColors(containerColor = AppSurface),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                    .border(1.dp, AppBorder, RoundedCornerShape(20.dp))
             ) {
                 Column(
                     modifier = Modifier
@@ -280,7 +283,7 @@ fun VerificationSuccessScreen(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp,
-                        color = Color(0xFF00E5FF),
+                        color = AppText,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -290,8 +293,8 @@ fun VerificationSuccessScreen(
                         modifier = Modifier
                             .size(180.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF0B132B))
-                            .border(2.dp, Color(0xFF10B981), RoundedCornerShape(16.dp)),
+                            .background(AppSurface)
+                            .border(2.dp, AppSuccess, RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         val displayBitmap = remember(capturedBitmap) {
@@ -319,7 +322,7 @@ fun VerificationSuccessScreen(
                             Icon(
                                 imageVector = Icons.Default.Visibility,
                                 contentDescription = null,
-                                tint = Color(0xFF10B981),
+                                tint = AppSuccess,
                                 modifier = Modifier.size(48.dp)
                             )
                         }
@@ -333,13 +336,13 @@ fun VerificationSuccessScreen(
                     .fillMaxWidth()
                     .height(52.dp)
                     .testTag("restart_verification_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                colors = ButtonDefaults.buttonColors(containerColor = AppButton),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Login,
                     contentDescription = null,
-                    tint = Color(0xFF0B132B),
+                    tint = AppText,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -347,7 +350,7 @@ fun VerificationSuccessScreen(
                     text = "Office In Again",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0B132B)
+                    color = AppText
                 )
             }
 
@@ -357,21 +360,21 @@ fun VerificationSuccessScreen(
                     .fillMaxWidth()
                     .height(48.dp)
                     .testTag("return_to_dashboard_button"),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AppBorder),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = AppText,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Return to Home",
                     fontSize = 14.sp,
-                    color = Color.White
+                    color = AppText
                 )
             }
 
@@ -381,8 +384,8 @@ fun VerificationSuccessScreen(
                     .fillMaxWidth()
                     .height(48.dp)
                     .testTag("result_logout_button"),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(

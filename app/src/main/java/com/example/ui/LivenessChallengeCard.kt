@@ -1,5 +1,13 @@
 package com.example.ui
 
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
+import com.example.ui.theme.AppWarning
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -62,10 +70,10 @@ fun LivenessChallengeCard(
 
     val cardBorderColor by animateColorAsState(
         targetValue = when {
-            isSpoofAlert -> Color(0xFFEF4444)
-            isLivenessVerified -> Color(0xFF10B981)
-            metrics.hasFace -> Color(0xFF00E5FF)
-            else -> Color(0xFF334155)
+            isSpoofAlert -> AppError
+            isLivenessVerified -> AppSuccess
+            metrics.hasFace -> AppButton
+            else -> AppBorder
         },
         label = "borderColor"
     )
@@ -77,7 +85,7 @@ fun LivenessChallengeCard(
             .testTag("liveness_challenge_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xDD0B132B)
+            containerColor = AppSurface.copy(alpha = 0.94f)
         ),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = Brush.horizontalGradient(
@@ -125,7 +133,7 @@ fun LivenessChallengeCard(
                         text = if (isLivenessVerified) "PASSED" else "STEP ${currentStepIndex + 1} OF ${challenges.size}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF94A3B8)
+                        color = AppTextMuted
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
@@ -135,7 +143,7 @@ fun LivenessChallengeCard(
                         Icon(
                             imageVector = Icons.Default.FlipCameraAndroid,
                             contentDescription = "Switch Camera",
-                            tint = Color(0xFFE2E8F0),
+                            tint = AppText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -146,7 +154,7 @@ fun LivenessChallengeCard(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Restart Challenge",
-                            tint = Color(0xFFE2E8F0),
+                            tint = AppText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -175,14 +183,14 @@ fun LivenessChallengeCard(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
-                                tint = Color(0xFF10B981),
+                                tint = AppSuccess,
                                 modifier = Modifier.size(24.dp)
                             )
                         } else if (isSpoofAlert) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = null,
-                                tint = Color(0xFFEF4444),
+                                tint = AppError,
                                 modifier = Modifier.size(24.dp)
                             )
                         } else {
@@ -211,7 +219,7 @@ fun LivenessChallengeCard(
                         },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = AppText
                     )
                     Text(
                         text = if (isSpoofAlert) {
@@ -220,7 +228,7 @@ fun LivenessChallengeCard(
                             statusText
                         },
                         fontSize = 12.sp,
-                        color = Color(0xFF94A3B8),
+                        color = AppTextMuted,
                         lineHeight = 16.sp
                     )
                 }
@@ -241,7 +249,7 @@ fun LivenessChallengeCard(
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
                 color = cardBorderColor,
-                trackColor = Color(0xFF1E293B)
+                trackColor = AppBorder
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -266,9 +274,9 @@ fun LivenessChallengeCard(
                                 .clip(CircleShape)
                                 .background(
                                     when {
-                                        isDone -> Color(0xFF10B981)
-                                        isCurrent -> Color(0xFF00E5FF)
-                                        else -> Color(0xFF1E293B)
+                                        isDone -> AppSuccess
+                                        isCurrent -> AppButton
+                                        else -> AppBorder
                                     }
                                 ),
                             contentAlignment = Alignment.Center
@@ -277,7 +285,7 @@ fun LivenessChallengeCard(
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = Color.Black,
+                                    tint = AppSurface,
                                     modifier = Modifier.size(14.dp)
                                 )
                             } else {
@@ -285,7 +293,7 @@ fun LivenessChallengeCard(
                                     text = "${index + 1}",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isCurrent) Color.Black else Color(0xFF64748B)
+                                    color = if (isCurrent) AppText else AppSurface
                                 )
                             }
                         }
@@ -296,7 +304,7 @@ fun LivenessChallengeCard(
                                     .weight(1f)
                                     .height(2.dp)
                                     .background(
-                                        if (isDone) Color(0xFF10B981).copy(alpha = 0.6f) else Color(0xFF1E293B)
+                                        if (isDone) AppSuccess.copy(alpha = 0.6f) else AppBorder
                                     )
                             )
                         }
@@ -314,14 +322,14 @@ fun LivenessChallengeCard(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF10B981)
+                    color = AppSuccess
                 ) {
                     Text(
                         text = "Recording Office In…",
                         modifier = Modifier.padding(vertical = 14.dp),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF030712),
+                        color = AppSurface,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -355,9 +363,9 @@ fun TelemetryHudPills(
 
         // Spoof Risk Pill
         val riskColor = when (spoofResult.riskLevel) {
-            SpoofRiskLevel.LOW -> Color(0xFF10B981)
-            SpoofRiskLevel.MEDIUM -> Color(0xFFF59E0B)
-            SpoofRiskLevel.HIGH -> Color(0xFFEF4444)
+            SpoofRiskLevel.LOW -> AppSuccess
+            SpoofRiskLevel.MEDIUM -> AppWarning
+            SpoofRiskLevel.HIGH -> AppError
         }
         val riskText = when {
             spoofResult.isScreenReplayDetected -> "SCREEN"
@@ -405,8 +413,8 @@ private fun HudChip(
     value: String,
     highlight: Boolean
 ) {
-    val bg = if (highlight) Color(0xFF00E5FF).copy(alpha = 0.2f) else Color(0xFF1E293B).copy(alpha = 0.7f)
-    val textColor = if (highlight) Color(0xFF00E5FF) else Color(0xFFCBD5E1)
+    val bg = if (highlight) AppButton.copy(alpha = 0.2f) else AppBorder.copy(alpha = 0.2f)
+    val textColor = AppText
 
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -421,7 +429,7 @@ private fun HudChip(
                 text = "$label: ",
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF64748B)
+                color = AppTextMuted
             )
             Text(
                 text = value,

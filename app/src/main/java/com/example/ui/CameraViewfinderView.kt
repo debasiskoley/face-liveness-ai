@@ -1,5 +1,9 @@
 package com.example.ui
 
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppSuccess
+import com.example.ui.theme.AppWarning
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -212,7 +216,7 @@ private fun SimulatedViewfinderCanvas(metrics: FaceMetrics) {
             val w = size.width
             val h = size.height
             val gridStep = 40f
-            val gridColor = Color(0x1500E5FF)
+            val gridColor = AppButton.copy(alpha = 0.08f)
             var x = 0f
             while (x < w) {
                 drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
@@ -226,7 +230,7 @@ private fun SimulatedViewfinderCanvas(metrics: FaceMetrics) {
 
             // Central holographic focus ring
             drawCircle(
-                color = Color(0x1000E5FF),
+                color = AppButton.copy(alpha = 0.06f),
                 radius = w * 0.38f,
                 center = Offset(w * 0.5f, h * 0.46f),
                 style = Stroke(width = 2f)
@@ -244,10 +248,10 @@ private fun BiometricOverlayCanvas(
     isFrontCamera: Boolean
 ) {
     val primaryColor = when {
-        isLivenessVerified -> Color(0xFF10B981)
-        spoofResult.riskLevel == SpoofRiskLevel.HIGH -> Color(0xFFEF4444)
-        spoofResult.riskLevel == SpoofRiskLevel.MEDIUM -> Color(0xFFF59E0B)
-        else -> Color(0xFF00E5FF)
+        isLivenessVerified -> AppSuccess
+        spoofResult.riskLevel == SpoofRiskLevel.HIGH -> AppError
+        spoofResult.riskLevel == SpoofRiskLevel.MEDIUM -> AppWarning
+        else -> AppButton
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {

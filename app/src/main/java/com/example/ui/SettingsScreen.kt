@@ -1,5 +1,10 @@
 package com.example.ui
 
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppError
+import com.example.ui.theme.AppText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +52,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030712))
+            .background(AppBackground)
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
             .testTag("settings_screen"),
@@ -101,8 +106,8 @@ fun SettingsScreen(
                 .height(50.dp)
                 .testTag("logout_button"),
             shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444))
+            border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
         ) {
             Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -118,14 +123,15 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
             text = title.uppercase(Locale.ROOT),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF00E5FF),
+            color = AppText,
             letterSpacing = 1.sp,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF0B132B)
+            color = AppSurface,
+            border = BorderStroke(1.dp, AppBorder)
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 content()
@@ -145,7 +151,7 @@ private fun SettingsRow(label: String, value: String) {
         Text(
             text = label,
             fontSize = 14.sp,
-            color = Color(0xFFCBD5E1),
+            color = AppText,
             modifier = Modifier.weight(1f)
         )
         Spacer(modifier = Modifier.size(12.dp))
@@ -153,7 +159,7 @@ private fun SettingsRow(label: String, value: String) {
             text = value,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = AppText,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
@@ -162,7 +168,7 @@ private fun SettingsRow(label: String, value: String) {
 
 @Composable
 private fun SettingsDivider() {
-    HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+    HorizontalDivider(color = AppBorder, thickness = 1.dp)
 }
 
 private fun formatDecimal(value: Float): String = String.format(Locale.US, "%.2f", value)

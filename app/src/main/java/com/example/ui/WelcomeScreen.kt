@@ -1,5 +1,11 @@
 package com.example.ui
 
+import com.example.ui.theme.AppBackground
+import com.example.ui.theme.AppBorder
+import com.example.ui.theme.AppButton
+import com.example.ui.theme.AppSurface
+import com.example.ui.theme.AppText
+import com.example.ui.theme.AppTextMuted
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -79,7 +85,7 @@ fun WelcomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .testTag("welcome_screen"),
-        containerColor = Color(0xFF030712),
+        containerColor = AppBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -87,7 +93,7 @@ fun WelcomeScreen(
                         Text(
                             text = registeredGateName,
                             fontSize = 13.sp,
-                            color = Color(0xFF10B981)
+                            color = AppText
                         )
                     }
                 },
@@ -97,12 +103,12 @@ fun WelcomeScreen(
                         modifier = Modifier
                             .padding(end = 12.dp)
                             .size(52.dp)
-                            .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), CircleShape)
+                            .border(1.dp, AppBorder, CircleShape)
                             .testTag("register_device_button"),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color(0xFF00E5FF).copy(alpha = 0.15f),
-                            contentColor = Color(0xFF00E5FF)
+                            containerColor = AppButton,
+                            contentColor = AppText
                         )
                     ) {
                         Icon(
@@ -112,7 +118,7 @@ fun WelcomeScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF030712))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = AppBackground)
             )
         }
     ) { innerPadding ->
@@ -149,13 +155,13 @@ private fun WelcomeContent(
                 text = "Face Liveness AI",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = AppText
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Mark your attendance with a live face check",
                 fontSize = 14.sp,
-                color = Color(0xFF94A3B8),
+                color = AppText,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(48.dp))
@@ -168,13 +174,13 @@ private fun WelcomeContent(
                     .testTag("login_with_face_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00E5FF),
-                    contentColor = Color(0xFF030712)
+                    containerColor = AppButton,
+                    contentColor = AppText
                 )
             ) {
                 if (isCheckingDevice) {
                     CircularProgressIndicator(
-                        color = Color(0xFF030712),
+                        color = AppText,
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(20.dp)
                     )
@@ -194,8 +200,8 @@ private fun WelcomeContent(
                     .height(54.dp)
                     .testTag("enroll_face_button"),
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Color(0xFF334155)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE2E8F0))
+                border = BorderStroke(1.dp, AppBorder),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText)
             ) {
                 Icon(imageVector = Icons.Default.PersonAdd, contentDescription = null)
                 Spacer(modifier = Modifier.size(10.dp))
@@ -226,9 +232,9 @@ fun MobileNumberDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
-        containerColor = Color(0xFF0B132B),
-        titleContentColor = Color.White,
-        textContentColor = Color(0xFFCBD5E1),
+        containerColor = AppSurface,
+        titleContentColor = AppText,
+        textContentColor = AppText,
         title = { Text(text = action.title, fontWeight = FontWeight.Bold) },
         text = {
             Column {
@@ -258,19 +264,19 @@ fun MobileNumberDialog(
                     ),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF00E5FF),
-                        unfocusedBorderColor = Color(0xFF334155),
-                        focusedLabelColor = Color(0xFF00E5FF),
-                        unfocusedLabelColor = Color(0xFF94A3B8),
-                        focusedPrefixColor = Color(0xFF94A3B8),
-                        unfocusedPrefixColor = Color(0xFF94A3B8),
-                        disabledTextColor = Color(0xFF94A3B8),
-                        disabledBorderColor = Color(0xFF334155),
-                        disabledLabelColor = Color(0xFF64748B),
-                        disabledPrefixColor = Color(0xFF64748B),
-                        cursorColor = Color(0xFF00E5FF)
+                        focusedTextColor = AppText,
+                        unfocusedTextColor = AppText,
+                        focusedBorderColor = AppButton,
+                        unfocusedBorderColor = AppBorder,
+                        focusedLabelColor = AppText,
+                        unfocusedLabelColor = AppTextMuted,
+                        focusedPrefixColor = AppTextMuted,
+                        unfocusedPrefixColor = AppTextMuted,
+                        disabledTextColor = AppTextMuted,
+                        disabledBorderColor = AppBorder,
+                        disabledLabelColor = AppTextMuted,
+                        disabledPrefixColor = AppTextMuted,
+                        cursorColor = AppButton
                     )
                 )
             }
@@ -281,13 +287,13 @@ fun MobileNumberDialog(
                 enabled = mobile.length == MOBILE_NUMBER_LENGTH && !isLoading,
                 modifier = Modifier.testTag("mobile_number_confirm"),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF00E5FF),
-                    contentColor = Color(0xFF030712)
+                    containerColor = AppButton,
+                    contentColor = AppText
                 )
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        color = Color(0xFF00E5FF),
+                        color = AppText,
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(18.dp)
                     )
@@ -298,7 +304,7 @@ fun MobileNumberDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isLoading) {
-                Text(text = "Cancel", color = Color(0xFF94A3B8))
+                Text(text = "Cancel", color = AppTextMuted)
             }
         }
     )
