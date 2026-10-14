@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
@@ -68,7 +69,8 @@ fun VerificationSuccessScreen(
     officeInTimestamp: Long?,
     identityMatch: IdentityMatchResult = IdentityMatchResult(),
     onNavigateBack: () -> Unit,
-    onRestartVerification: () -> Unit
+    onRestartVerification: () -> Unit,
+    onLogout: () -> Unit = {}
 ) {
     val formattedTime = SimpleDateFormat("MMM dd, yyyy · hh:mm:ss a", Locale.getDefault())
         .format(Date(officeInTimestamp ?: System.currentTimeMillis()))
@@ -161,7 +163,7 @@ fun VerificationSuccessScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (matched) "OFFICE IN RECORDED" else "FACE NOT ENROLLED",
+                        text = if (matched) "OFFICE IN RECORDED" else "FACE NOT MATCHED",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
@@ -172,9 +174,9 @@ fun VerificationSuccessScreen(
 
                     Text(
                         text = if (matched) {
-                            "${identityMatch.statusLabel} after MediaPipe liveness (center face + blink)."
+                            "${identityMatch.statusLabel} after the liveness check."
                         } else {
-                            "Liveness passed. ${identityMatch.statusLabel}. Enroll a profile photo first."
+                            "Liveness passed. ${identityMatch.statusLabel}."
                         },
                         fontSize = 12.sp,
                         color = if (matched) Color(0xFFA7F3D0) else Color(0xFFFECACA),
@@ -371,6 +373,25 @@ fun VerificationSuccessScreen(
                     fontSize = 14.sp,
                     color = Color.White
                 )
+            }
+
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("result_logout_button"),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Logout", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(16.dp))

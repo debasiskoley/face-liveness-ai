@@ -45,7 +45,9 @@ import com.example.model.SpoofRiskLevel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 private const val TAG = "CameraViewfinder"
@@ -66,9 +68,22 @@ fun CameraViewfinderView(
 
     // MediaPipe Face Landmarker Helper
     val mediaPipeHelper = remember { MediaPipeFaceLandmarkerHelper(context) }
+    val cameraSession = remember { CameraSession() }
     DisposableEffect(Unit) {
         onDispose {
-            mediaPipeHelper.close()
+            // Bound to the Activity lifecycle, so the camera stays on unless released here.
+            cameraSession.analysis?.clearAnalyzer()
+            cameraSession.provider?.unbindAll()
+            cameraSession.provider = null
+            cameraSession.analysis = null
+            val detector = cameraSession.faceDetector
+            cameraSession.faceDetector = null
+            // Runs after any in-flight frame on the single analysis thread.
+            cameraSession.executor.execute {
+                detector?.close()
+                mediaPipeHelper.close()
+            }
+            cameraSession.executor.shutdown()
         }
     }
 
@@ -95,7 +110,7 @@ fun CameraViewfinderView(
                     }
 
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                    val cameraExecutor = Executors.newSingleThreadExecutor()
+                    val cameraExecutor = cameraSession.executor
 
                     val faceDetectorOptions = FaceDetectorOptions.Builder()
                         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -106,10 +121,13 @@ fun CameraViewfinderView(
                         .build()
 
                     val faceDetector = FaceDetection.getClient(faceDetectorOptions)
+                    cameraSession.faceDetector = faceDetector
 
                     cameraProviderFuture.addListener({
+                        if (cameraSession.executor.isShutdown) return@addListener
                         try {
                             val cameraProvider = cameraProviderFuture.get()
+                            cameraSession.provider = cameraProvider
                             val preview = Preview.Builder().build().also {
                                 it.surfaceProvider = previewView.surfaceProvider
                             }
@@ -125,6 +143,7 @@ fun CameraViewfinderView(
                                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                                 .build()
 
+                            cameraSession.analysis = imageAnalysis
                             imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                                 processCameraFrame(
                                     imageProxy = imageProxy,
@@ -165,6 +184,13 @@ fun CameraViewfinderView(
             isFrontCamera = isFrontCamera
         )
     }
+}
+
+private class CameraSession {
+    val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    var provider: ProcessCameraProvider? = null
+    var analysis: ImageAnalysis? = null
+    var faceDetector: FaceDetector? = null
 }
 
 @Composable

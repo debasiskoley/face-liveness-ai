@@ -17,7 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
   @Test
@@ -120,7 +120,17 @@ class ExampleRobolectricTest {
 
     val tabs = com.example.viewmodel.AppTab.values()
     assertTrue(tabs.contains(com.example.viewmodel.AppTab.HOME))
-    assertTrue(tabs.contains(com.example.viewmodel.AppTab.PROFILE))
+    assertTrue(tabs.contains(com.example.viewmodel.AppTab.SETTINGS))
+  }
+
+  @Test
+  fun `mobile number validation accepts only 10-digit Indian mobiles`() {
+    assertTrue(com.example.ui.isValidMobileNumber("9876543210"))
+    assertTrue(com.example.ui.isValidMobileNumber("6000000000"))
+    assertFalse(com.example.ui.isValidMobileNumber("5876543210"))
+    assertFalse(com.example.ui.isValidMobileNumber("987654321"))
+    assertFalse(com.example.ui.isValidMobileNumber("98765432101"))
+    assertFalse(com.example.ui.isValidMobileNumber("98765abcde"))
   }
 
   private fun patternedFace(color: Int, stripe: Int): android.graphics.Bitmap {

@@ -4,14 +4,17 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
+import android.net.Uri
+import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.EnrolledIdentityRepository
+import com.example.data.remote.ApiClient
+import com.example.data.remote.EmployeeFaceResponse
+import com.example.data.remote.MatchConfigDto
 import com.example.mediapipe.MediaPipeFaceLandmarkerHelper
 import com.example.ml.ArcFaceEmbedder
 import com.example.ml.FaceBiometricEngine
 import com.example.ml.FaceStandoff
-import com.example.ml.ProfileBiometricHelper
 import com.example.model.BiometricVector
 import com.example.model.ChallengeStep
 import com.example.model.ChallengeType
@@ -19,17 +22,28 @@ import com.example.model.EnrolledProfile
 import com.example.model.FaceMetrics
 import com.example.model.FacialLandmarks
 import com.example.model.IdentityMatchResult
+import com.example.model.MatchConfig
 import com.example.model.SpoofDetectionResult
 import com.example.model.SpoofRiskLevel
 import com.example.model.VerificationLogEntry
 import com.google.mlkit.vision.face.Face
+import com.squareup.moshi.JsonDataException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import retrofit2.HttpException
+import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,7 +60,7 @@ enum class AppScreen {
 
 enum class AppTab {
     HOME,
-    PROFILE
+    SETTINGS
 }
 
 data class FaceLivenessUiState(
@@ -74,8 +88,19 @@ data class FaceLivenessUiState(
     val isMatchingIdentity: Boolean = false,
 
     val enrolledProfiles: List<EnrolledProfile> = emptyList(),
-    val verificationLogs: List<VerificationLogEntry> = emptyList()
+    val verificationLogs: List<VerificationLogEntry> = emptyList(),
+
+    val mobileNumber: String = "",
+    val employeeId: String = "",
+    val employeeName: String = "",
+    val isLoggingIn: Boolean = false,
+    val matchConfig: MatchConfig = MatchConfig()
 )
+
+sealed interface LoginEvent {
+    data object Success : LoginEvent
+    data class Error(val message: String) : LoginEvent
+}
 
 enum class SimulationType(val label: String, val description: String) {
     LIVE_HUMAN("Live Human Subject", "Simulates normal living human face with MediaPipe 3D mesh micro-jitter and responsive blink."),
@@ -88,23 +113,23 @@ class FaceLivenessViewModel(
     application: Application
 ) : AndroidViewModel(application) {
 
-    private val repository: EnrolledIdentityRepository = EnrolledIdentityRepository.getInstance(application)
     private val biometricEngine: FaceBiometricEngine = FaceBiometricEngine()
-    private val identityEmbedder: ArcFaceEmbedder = ArcFaceEmbedder.getInstance(application)
+    private val identityEmbedder: ArcFaceEmbedder by lazy { ArcFaceEmbedder.getInstance(application) }
 
     private val _uiState = MutableStateFlow(FaceLivenessUiState())
     val uiState: StateFlow<FaceLivenessUiState> = _uiState.asStateFlow()
+
+    private val _loginEvents = Channel<LoginEvent>(Channel.BUFFERED)
+    val loginEvents: Flow<LoginEvent> = _loginEvents.receiveAsFlow()
+    private var loginJob: Job? = null
 
     private var simulationJob: Job? = null
     private var officeInCompleteJob: Job? = null
     private var blinkStage = 0 // 0: waiting for close, 1: closed, 2: reopened
 
     init {
-        viewModelScope.launch {
-            repository.profiles.collect { profiles ->
-                _uiState.update { it.copy(enrolledProfiles = profiles) }
-            }
-        }
+        // Loading the ONNX model takes seconds on low-end devices; keep it off the main thread.
+        viewModelScope.launch(Dispatchers.Default) { identityEmbedder }
     }
 
     fun setTab(tab: AppTab) {
@@ -182,23 +207,116 @@ class FaceLivenessViewModel(
         _uiState.update { it.copy(currentScreen = screen) }
     }
 
-    fun updateEnrolledProfile(updated: EnrolledProfile) {
-        viewModelScope.launch {
-            val template = ProfileBiometricHelper.extractIdentityTemplate(
-                getApplication(),
-                updated.photoUri
-            )
-            val withTemplate = if (BiometricVector.isIdentityTemplate(template)) {
-                updated.copy(vector = template)
-            } else {
-                updated
+    fun loginWithFace(mobileNumber: String) {
+        if (_uiState.value.isLoggingIn) return
+        _uiState.update { it.copy(isLoggingIn = true) }
+        loginJob = viewModelScope.launch {
+            val event = try {
+                val response = ApiClient.faceApi.getEmployeeFace(mobileNumber)
+                startSession(mobileNumber, response)
+                LoginEvent.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LoginEvent.Error(describeLoginError(e))
             }
-            repository.updateProfile(withTemplate)
+            _uiState.update { it.copy(isLoggingIn = false) }
+            _loginEvents.send(event)
         }
     }
 
-    fun deleteEnrolledProfile(profileId: String) {
-        repository.deleteProfile(profileId)
+    private suspend fun startSession(mobileNumber: String, response: EmployeeFaceResponse) {
+        val face = response.face
+        val embedding = face?.embedding.orEmpty()
+        val config = response.matchConfig.toMatchConfig()
+        if (embedding.isEmpty()) throw IllegalStateException("No face enrolled for this mobile number.")
+        if (embedding.size != config.embeddingDim) {
+            throw IllegalStateException(
+                "Enrolled face has ${embedding.size} values; this app needs ${config.embeddingDim}. Re-enroll the face."
+            )
+        }
+
+        val employee = response.employee
+        val name = employee?.name?.takeIf { it.isNotBlank() } ?: "+91 $mobileNumber"
+        val profile = EnrolledProfile(
+            id = face?.faceId ?: employee?.employeeId ?: mobileNumber,
+            name = name,
+            enrolledDate = "",
+            vector = BiometricVector(embedding.toFloatArray()),
+            photoUri = face?.imageBase64?.let { saveEnrolledFacePhoto(it) },
+            mobileNo = employee?.mobileNumber ?: mobileNumber
+        )
+
+        _uiState.update {
+            it.copy(
+                mobileNumber = mobileNumber,
+                employeeId = employee?.employeeId.orEmpty(),
+                employeeName = name,
+                enrolledProfiles = listOf(profile),
+                matchConfig = config,
+                selectedTab = AppTab.HOME,
+                currentScreen = AppScreen.MAIN_DASHBOARD,
+                identityMatch = IdentityMatchResult()
+            )
+        }
+    }
+
+    private fun MatchConfigDto?.toMatchConfig(): MatchConfig {
+        val defaults = MatchConfig()
+        if (this == null) return defaults
+        val challenges = requiredChallenges.orEmpty().mapNotNull { name ->
+            ChallengeType.entries.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+        }
+        return defaults.copy(
+            threshold = threshold?.takeIf { it > 0f && it <= 1f } ?: defaults.threshold,
+            maxSpoofProbability = maxSpoofProbability?.takeIf { it > 0f && it <= 1f }
+                ?: defaults.maxSpoofProbability,
+            requiredChallenges = challenges.distinct().ifEmpty { defaults.requiredChallenges }
+        )
+    }
+
+    /** Writes the server face crop to cache so the result screen can show it; returns a file URI. */
+    private suspend fun saveEnrolledFacePhoto(imageBase64: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val bytes = Base64.decode(imageBase64.substringAfter("base64,"), Base64.DEFAULT)
+            if (bytes.isEmpty()) return@withContext null
+            val dir = getApplication<Application>().cacheDir
+            dir.listFiles { file -> file.name.startsWith(ENROLLED_FACE_PREFIX) }?.forEach { it.delete() }
+            val file = File(dir, "$ENROLLED_FACE_PREFIX${System.currentTimeMillis()}.jpg")
+            file.writeBytes(bytes)
+            Uri.fromFile(file).toString()
+        } catch (_: IllegalArgumentException) {
+            null
+        } catch (_: IOException) {
+            null
+        }
+    }
+
+    private fun describeLoginError(e: Exception): String = when (e) {
+        is HttpException -> ApiClient.errorMessage(e)?.takeIf { it.isNotBlank() }
+            ?: if (e.code() == 404) "Employee doesn't exist" else "Login failed (HTTP ${e.code()})"
+        is IOException -> "Cannot reach the server at ${ApiClient.baseUrl}"
+        is JsonDataException -> "Unexpected response from the server."
+        else -> e.message ?: "Login failed."
+    }
+
+    fun logout() {
+        loginJob?.cancel()
+        cancelOfficeIn()
+        _uiState.update {
+            it.copy(
+                mobileNumber = "",
+                employeeId = "",
+                employeeName = "",
+                isLoggingIn = false,
+                enrolledProfiles = emptyList(),
+                matchConfig = MatchConfig(),
+                selectedTab = AppTab.HOME,
+                currentScreen = AppScreen.MAIN_DASHBOARD,
+                verifiedCapturedBitmap = null,
+                identityMatch = IdentityMatchResult()
+            )
+        }
     }
 
     fun completeOfficeIn() {
@@ -206,23 +324,27 @@ class FaceLivenessViewModel(
             val liveBmp = _uiState.value.lastCapturedBitmap
             val liveBox = _uiState.value.metrics.boundingBox
             val profiles = _uiState.value.enrolledProfiles
+            val config = _uiState.value.matchConfig
             _uiState.update {
                 it.copy(
                     isMatchingIdentity = true,
-                    challengeStatusText = "Matching enrolled templates…"
+                    challengeStatusText = "Matching your enrolled face…"
                 )
             }
             val match = identityEmbedder.match(
                 liveBmp,
                 liveBox,
-                profiles
+                profiles,
+                threshold = config.threshold
             )
             val spoof = _uiState.value.spoofResult
             if (!_uiState.value.isLivenessVerified) {
                 _uiState.update { it.copy(isMatchingIdentity = false) }
                 return@launch
             }
-            if (spoof.riskLevel == SpoofRiskLevel.HIGH || !spoof.isLive) {
+            if (spoof.riskLevel == SpoofRiskLevel.HIGH || !spoof.isLive ||
+                spoof.spoofProbability > config.maxSpoofProbability
+            ) {
                 _uiState.update {
                     it.copy(
                         isLivenessVerified = false,
@@ -261,38 +383,6 @@ class FaceLivenessViewModel(
         startOfficeIn()
     }
 
-    fun enrollProfileWithDetails(
-        name: String,
-        address: String = "",
-        mobileNo: String = "",
-        email: String = "",
-        role: String = "Authorized Person",
-        notes: String = "",
-        photoUri: String? = null,
-        avatarColor: Long = 0xFF0284C7
-    ) {
-        viewModelScope.launch {
-            val template = ProfileBiometricHelper.extractIdentityTemplate(
-                getApplication(),
-                photoUri
-            )
-            repository.enrollNewProfile(
-                name = name,
-                address = address,
-                mobileNo = mobileNo,
-                email = email,
-                role = role,
-                vector = template,
-                notes = notes,
-                photoUri = photoUri,
-                avatarColor = avatarColor
-            )
-            _uiState.update {
-                it.copy(currentScreen = AppScreen.MAIN_DASHBOARD)
-            }
-        }
-    }
-
     fun resetChallenges() {
         initChallenges()
         biometricEngine.resetHistory()
@@ -300,11 +390,8 @@ class FaceLivenessViewModel(
     }
 
     private fun initChallenges() {
-        // MiniFASNet PAD first (mesh on), then MediaPipe center + blink with mesh cleared.
-        val challenges = listOf(
-            ChallengeStep(ChallengeType.CENTER_FACE),
-            ChallengeStep(ChallengeType.BLINK_EYES)
-        )
+        // MiniFASNet PAD first (mesh on), then the MediaPipe challenges from the match config.
+        val challenges = _uiState.value.matchConfig.requiredChallenges.map { ChallengeStep(it) }
         _uiState.update {
             it.copy(
                 challenges = challenges,
@@ -779,5 +866,9 @@ class FaceLivenessViewModel(
         super.onCleared()
         simulationJob?.cancel()
         officeInCompleteJob?.cancel()
+    }
+
+    private companion object {
+        const val ENROLLED_FACE_PREFIX = "enrolled_face_"
     }
 }

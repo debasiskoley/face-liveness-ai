@@ -1,0 +1,52 @@
+package com.example.data.remote
+
+import com.squareup.moshi.JsonClass
+
+@JsonClass(generateAdapter = true)
+data class EnrollFaceRequest(
+    val mobileNumber: String,
+    val face: FacePayload
+)
+
+@JsonClass(generateAdapter = true)
+data class FacePayload(
+    val faceId: String? = null,
+    val embedding: List<Float>? = null,
+    val embeddingDim: Int? = null,
+    val normalized: Boolean? = null,
+    val imageBase64: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EnrollFaceResponse(
+    val mobileNumber: String? = null,
+    val faceId: String? = null,
+    val face: FacePayload? = null,
+    val enrolledAt: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EmployeeFaceResponse(
+    val employee: EmployeeDto? = null,
+    val face: FacePayload? = null,
+    val matchConfig: MatchConfigDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EmployeeDto(
+    val employeeId: String? = null,
+    val name: String? = null,
+    val mobileNumber: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MatchConfigDto(
+    val threshold: Float? = null,
+    val requiredChallenges: List<String>? = null,
+    val maxSpoofProbability: Float? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ApiErrorResponse(
+    val message: String? = null
+)

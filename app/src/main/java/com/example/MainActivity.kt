@@ -3,7 +3,9 @@ package com.example
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -22,8 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,25 +53,126 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.data.remote.ApiClient
+import com.example.ui.EnrollFaceScreen
 import com.example.ui.HomeScreen
-import com.example.ui.ProfilesScreen
+import com.example.ui.MobileAction
+import com.example.ui.MobileNumberDialog
+import com.example.ui.SettingsScreen
+import com.example.ui.SplashScreen
 import com.example.ui.VerificationSuccessScreen
+import com.example.ui.WelcomeScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.AppTab
+import com.example.viewmodel.EnrollFaceViewModel
 import com.example.viewmodel.FaceLivenessViewModel
+import com.example.viewmodel.LoginEvent
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: FaceLivenessViewModel by viewModels()
+    private val enrollViewModel: EnrollFaceViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         setContent {
             MyApplicationTheme {
-                FaceLivenessApp(viewModel = viewModel)
+                FaceLivenessRoot(viewModel = viewModel, enrollViewModel = enrollViewModel)
+            }
+        }
+    }
+}
+
+private enum class AppRoute {
+    SPLASH,
+    WELCOME,
+    ENROLL_FACE,
+    DASHBOARD
+}
+
+@Composable
+fun FaceLivenessRoot(
+    viewModel: FaceLivenessViewModel,
+    enrollViewModel: EnrollFaceViewModel
+) {
+    val context = LocalContext.current
+    val uiState by viewModel.uiState.collectAsState()
+    var route by rememberSaveable { mutableStateOf(AppRoute.SPLASH) }
+    var mobileAction by rememberSaveable { mutableStateOf<MobileAction?>(null) }
+    var enrollMobile by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(viewModel) {
+        viewModel.loginEvents.collect { event ->
+            when (event) {
+                LoginEvent.Success -> {
+                    mobileAction = null
+                    route = AppRoute.DASHBOARD
+                }
+                is LoginEvent.Error -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    when (route) {
+        AppRoute.SPLASH -> SplashScreen(onFinished = { route = AppRoute.WELCOME })
+
+        AppRoute.WELCOME -> {
+            WelcomeScreen(
+                onLoginWithFace = { mobileAction = MobileAction.LOGIN_WITH_FACE },
+                onEnrollFace = { mobileAction = MobileAction.ENROLL_FACE }
+            )
+            mobileAction?.let { action ->
+                MobileNumberDialog(
+                    action = action,
+                    isLoading = action == MobileAction.LOGIN_WITH_FACE && uiState.isLoggingIn,
+                    onDismiss = { mobileAction = null },
+                    onConfirm = { mobile ->
+                        when (action) {
+                            MobileAction.LOGIN_WITH_FACE -> viewModel.loginWithFace(mobile)
+                            MobileAction.ENROLL_FACE -> {
+                                mobileAction = null
+                                enrollViewModel.reset()
+                                enrollMobile = mobile
+                                route = AppRoute.ENROLL_FACE
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        AppRoute.ENROLL_FACE -> {
+            val leaveEnroll = {
+                enrollViewModel.reset()
+                route = AppRoute.WELCOME
+            }
+            BackHandler(onBack = leaveEnroll)
+            EnrollFaceScreen(
+                mobileNumber = enrollMobile,
+                viewModel = enrollViewModel,
+                onBack = leaveEnroll,
+                onEnrolled = leaveEnroll
+            )
+        }
+
+        AppRoute.DASHBOARD -> {
+            // The fetched face lives only in memory, so a restored process has nothing to match against.
+            if (uiState.enrolledProfiles.isEmpty()) {
+                LaunchedEffect(Unit) { route = AppRoute.WELCOME }
+            } else {
+                FaceLivenessApp(
+                    viewModel = viewModel,
+                    onLogout = {
+                        viewModel.logout()
+                        route = AppRoute.WELCOME
+                    }
+                )
             }
         }
     }
@@ -74,7 +180,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
+fun FaceLivenessApp(
+    viewModel: FaceLivenessViewModel,
+    onLogout: () -> Unit = {}
+) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
@@ -111,7 +220,8 @@ fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
                 officeInTimestamp = uiState.officeInTimestamp,
                 identityMatch = uiState.identityMatch,
                 onNavigateBack = { viewModel.navigateToScreen(AppScreen.MAIN_DASHBOARD) },
-                onRestartVerification = { viewModel.restartVerificationFlow() }
+                onRestartVerification = { viewModel.restartVerificationFlow() },
+                onLogout = onLogout
             )
         }
 
@@ -149,7 +259,7 @@ fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
                                         text = if (uiState.selectedTab == AppTab.HOME) {
                                             "Home · Office In"
                                         } else {
-                                            "Profile"
+                                            "Settings"
                                         },
                                         fontSize = 10.sp,
                                         color = Color(0xFF10B981)
@@ -203,15 +313,15 @@ fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
                         )
 
                         NavigationBarItem(
-                            selected = uiState.selectedTab == AppTab.PROFILE,
-                            onClick = { viewModel.setTab(AppTab.PROFILE) },
+                            selected = uiState.selectedTab == AppTab.SETTINGS,
+                            onClick = { viewModel.setTab(AppTab.SETTINGS) },
                             icon = {
                                 Icon(
-                                    imageVector = Icons.Default.People,
-                                    contentDescription = "Profile"
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings"
                                 )
                             },
-                            label = { Text("Profile") },
+                            label = { Text("Settings") },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Color(0xFF00E5FF),
                                 selectedTextColor = Color(0xFF00E5FF),
@@ -219,7 +329,7 @@ fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
                                 unselectedIconColor = Color(0xFF64748B),
                                 unselectedTextColor = Color(0xFF64748B)
                             ),
-                            modifier = Modifier.testTag("tab_profile")
+                            modifier = Modifier.testTag("tab_settings")
                         )
                     }
                 }
@@ -255,25 +365,14 @@ fun FaceLivenessApp(viewModel: FaceLivenessViewModel) {
                             )
                         }
 
-                        AppTab.PROFILE -> {
-                            ProfilesScreen(
-                                profiles = uiState.enrolledProfiles,
-                                currentVector = uiState.currentVector,
-                                metrics = uiState.metrics,
-                                onAddProfile = { name, role, email, mobileNo, address, notes, color, photoUri ->
-                                    viewModel.enrollProfileWithDetails(
-                                        name = name,
-                                        address = address,
-                                        mobileNo = mobileNo,
-                                        email = email,
-                                        role = role,
-                                        notes = notes,
-                                        photoUri = photoUri,
-                                        avatarColor = color
-                                    )
-                                },
-                                onUpdateProfile = { updated -> viewModel.updateEnrolledProfile(updated) },
-                                onDeleteProfile = { profileId -> viewModel.deleteEnrolledProfile(profileId) }
+                        AppTab.SETTINGS -> {
+                            SettingsScreen(
+                                employeeName = uiState.employeeName,
+                                employeeId = uiState.employeeId,
+                                mobileNumber = uiState.mobileNumber,
+                                matchConfig = uiState.matchConfig,
+                                serverUrl = ApiClient.baseUrl,
+                                onLogout = onLogout
                             )
                         }
                     }

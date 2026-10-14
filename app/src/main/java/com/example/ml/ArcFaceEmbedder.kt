@@ -76,12 +76,24 @@ class ArcFaceEmbedder private constructor(context: Context) {
         )
     }
 
-    suspend fun embedFromBitmap(bitmap: Bitmap): BiometricVector? = withContext(Dispatchers.Default) {
+    /** False when the ONNX model failed to load and embeddings come from the local fallback descriptor. */
+    val isArcFaceLoaded: Boolean
+        get() = usesOnnx
+
+    data class FaceEmbedding(
+        val vector: BiometricVector,
+        val alignedFace: Bitmap
+    )
+
+    suspend fun embedFace(bitmap: Bitmap): FaceEmbedding? = withContext(Dispatchers.Default) {
         val software = softwareBitmap(bitmap) ?: return@withContext null
         val scaled = downscaleForDetect(software)
         val aligned = alignDetectedFace(scaled) ?: return@withContext null
-        embedCrop(aligned)
+        val vector = embedCrop(aligned) ?: return@withContext null
+        FaceEmbedding(vector, aligned)
     }
+
+    suspend fun embedFromBitmap(bitmap: Bitmap): BiometricVector? = embedFace(bitmap)?.vector
 
     fun embedAlignedCrop(
         crop: Bitmap,
@@ -112,7 +124,8 @@ class ArcFaceEmbedder private constructor(context: Context) {
         liveBitmap: Bitmap?,
         liveFaceBox: RectF? = null,
         profiles: List<EnrolledProfile>,
-        meshPoints: List<PointF> = emptyList()
+        meshPoints: List<PointF> = emptyList(),
+        threshold: Float? = null
     ): IdentityMatchResult = withContext(Dispatchers.Default) {
         val templates = profiles.filter { BiometricVector.isIdentityTemplate(it.vector) }
         if (templates.isEmpty()) {
@@ -154,7 +167,9 @@ class ArcFaceEmbedder private constructor(context: Context) {
             }
         }
 
-        val isMatch = best != null && bestScore >= matchThreshold
+        // A server threshold is calibrated for ArcFace cosine scores, not the fallback descriptor.
+        val effectiveThreshold = if (usesOnnx && threshold != null) threshold else matchThreshold
+        val isMatch = best != null && bestScore >= effectiveThreshold
         val percent = ((bestScore.coerceIn(0f, 1f)) * 100).toInt()
         IdentityMatchResult(
             isMatch = isMatch,
@@ -163,8 +178,8 @@ class ArcFaceEmbedder private constructor(context: Context) {
             matchPercentage = percent,
             statusLabel = when {
                 isMatch -> "Matched ${best?.name}"
-                best != null -> "Not enrolled (best ${percent}%)"
-                else -> "Not enrolled"
+                best != null -> "Face does not match (best ${percent}%)"
+                else -> "Face template not comparable"
             }
         )
     }
@@ -295,6 +310,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
     companion object {
         private const val TAG = "ArcFaceEmbedder"
         const val MODEL_MBF = "w600k_mbf.onnx"
+        const val EMBEDDING_MODEL = "arcface-w600k_mbf"
         const val MIN_TEMPLATE_SIZE = 128
         private const val FALLBACK_INPUT = 112
         private const val GRID = 8
