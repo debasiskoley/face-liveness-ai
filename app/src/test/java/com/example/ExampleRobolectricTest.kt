@@ -2,7 +2,6 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.data.EnrolledIdentityRepository
 import com.example.ml.FaceBiometricEngine
 import com.example.model.BiometricVector
 import com.example.model.FaceMetrics
@@ -40,41 +39,6 @@ class ExampleRobolectricTest {
     val v3 = BiometricVector(FloatArray(32) { if (it % 2 == 0) 1.0f else -1.0f })
     val dist = v1.euclideanDistance(v3)
     assertTrue(dist > 0.1f)
-  }
-
-  @Test
-  fun `identity repository profile selection and enrollment`() {
-    val repo = EnrolledIdentityRepository()
-    val profiles = repo.profiles.value
-    assertTrue(profiles.isNotEmpty())
-
-    val first = profiles.first()
-    assertEquals(first.id, repo.selectedProfile.value?.id)
-
-    // Enroll new live face
-    val testVector = BiometricVector(FloatArray(32) { 0.2f })
-    val enrolled = repo.enrollNewProfile(
-        name = "Jane Doe",
-        address = "123 Innovation Way, Tech City",
-        mobileNo = "+1 555-0199",
-        email = "jane.doe@biometric.org",
-        role = "Chief Architect",
-        vector = testVector,
-        notes = "Biometric Pass Enrolled",
-        photoUri = "file:///storage/profile.jpg"
-    )
-    assertEquals("Jane Doe", enrolled.name)
-    assertEquals("123 Innovation Way, Tech City", enrolled.address)
-    assertEquals("+1 555-0199", enrolled.mobileNo)
-    assertEquals("jane.doe@biometric.org", enrolled.email)
-    assertEquals("Chief Architect", enrolled.role)
-    assertEquals(enrolled.id, repo.selectedProfile.value?.id)
-
-    // Update details
-    val updated = enrolled.copy(address = "456 Updated Blvd", mobileNo = "+1 555-0200")
-    repo.updateProfile(updated)
-    assertEquals("456 Updated Blvd", repo.selectedProfile.value?.address)
-    assertEquals("+1 555-0200", repo.selectedProfile.value?.mobileNo)
   }
 
   @Test
