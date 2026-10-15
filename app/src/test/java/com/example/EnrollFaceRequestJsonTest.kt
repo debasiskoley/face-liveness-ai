@@ -1,11 +1,15 @@
 package com.example
 
 import com.example.data.remote.ApiErrorResponse
+import com.example.data.remote.DeviceInfoPayload
 import com.example.data.remote.EmployeeFaceResponse
 import com.example.data.remote.EnrollFaceRequest
 import com.example.data.remote.EnrollFaceResponse
 import com.example.data.remote.FacePayload
 import com.example.data.remote.GateDto
+import com.example.data.remote.LivenessPayload
+import com.example.data.remote.MatchResultRequest
+import com.example.data.remote.MatchResultResponse
 import com.example.data.remote.RegisterDeviceRequest
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
@@ -96,5 +100,46 @@ class EnrollFaceRequestJsonTest {
     assertEquals("f-1", response.faceId)
     assertEquals("2026-10-14T10:00:00Z", response.enrolledAt)
     assertNull(response.face)
+  }
+
+  @Test
+  fun `match result request serializes to the match-result API shape`() {
+    val request = MatchResultRequest(
+        event = "IN",
+        result = "SUCCESS",
+        faceId = "f_326d6a1f",
+        cosineSimilarity = 0.62f,
+        threshold = 0.4f,
+        liveness = LivenessPayload(
+            passed = true,
+            challengesCompleted = listOf("CENTER_FACE", "BLINK_EYES"),
+            spoofProbability = 0.12f
+        ),
+        imageBase64 = "AAA=",
+        capturedAt = "2026-10-15T16:57:00+05:30",
+        device = DeviceInfoPayload(deviceId = "43c2ce523cd60cba", appVersion = "1.0", gateId = 2)
+    )
+
+    val json = moshi.adapter(MatchResultRequest::class.java).toJson(request)
+
+    assertEquals(
+        """{"event":"IN","result":"SUCCESS","faceId":"f_326d6a1f","cosineSimilarity":0.62,"threshold":0.4,""" +
+            """"liveness":{"passed":true,"challengesCompleted":["CENTER_FACE","BLINK_EYES"],"spoofProbability":0.12},""" +
+            """"imageBase64":"AAA=","capturedAt":"2026-10-15T16:57:00+05:30",""" +
+            """"device":{"deviceId":"43c2ce523cd60cba","appVersion":"1.0","gateId":2}}""",
+        json
+    )
+  }
+
+  @Test
+  fun `match result response parses the 201 body`() {
+    val response = moshi.adapter(MatchResultResponse::class.java).fromJson(
+        """{"recordId":"rec_20261015_5010","employeeId":"1001","gateId":2,"event":"IN","result":"SUCCESS",""" +
+            """"attendanceRecorded":true,"recordedAt":"2026-10-15T17:01:16+05:30","message":"Office In recorded"}"""
+    )!!
+
+    assertEquals("rec_20261015_5010", response.recordId)
+    assertEquals(true, response.attendanceRecorded)
+    assertEquals("Office In recorded", response.message)
   }
 }

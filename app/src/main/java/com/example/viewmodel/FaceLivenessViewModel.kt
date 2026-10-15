@@ -8,9 +8,14 @@ import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.remote.ApiClient
+import com.example.data.remote.DeviceInfoPayload
 import com.example.data.remote.EmployeeFaceResponse
+import com.example.data.remote.LivenessPayload
 import com.example.data.remote.MatchConfigDto
+import com.example.data.remote.MatchResultRequest
+import com.example.data.remote.MatchResultResponse
 import com.example.mediapipe.MediaPipeFaceLandmarkerHelper
 import com.example.ml.ArcFaceEmbedder
 import com.example.ml.FaceBiometricEngine
@@ -42,6 +47,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -94,7 +100,22 @@ data class FaceLivenessUiState(
     val employeeId: String = "",
     val employeeName: String = "",
     val isLoggingIn: Boolean = false,
-    val matchConfig: MatchConfig = MatchConfig()
+    val matchConfig: MatchConfig = MatchConfig(),
+    val faceId: String = "",
+    val deviceId: String = "",
+    val gateId: Int? = null,
+
+    val isPostingMatchResult: Boolean = false,
+    val matchResultMessage: MatchResultMessage? = null
+)
+
+enum class MatchResultStatus { RECORDED, NOT_RECORDED, FAILED }
+
+data class MatchResultMessage(
+    val status: MatchResultStatus,
+    val title: String,
+    val message: String,
+    val details: List<String> = emptyList()
 )
 
 sealed interface LoginEvent {
@@ -125,6 +146,8 @@ class FaceLivenessViewModel(
 
     private var simulationJob: Job? = null
     private var officeInCompleteJob: Job? = null
+    private var matchResultJob: Job? = null
+    private var pendingMatchResult: MatchResultRequest? = null
     private var blinkStage = 0 // 0: waiting for close, 1: closed, 2: reopened
 
     init {
@@ -203,17 +226,18 @@ class FaceLivenessViewModel(
     fun navigateToScreen(screen: AppScreen) {
         if (screen == AppScreen.MAIN_DASHBOARD) {
             cancelOfficeIn()
+            _uiState.update { it.copy(matchResultMessage = null) }
         }
         _uiState.update { it.copy(currentScreen = screen) }
     }
 
-    fun loginWithFace(mobileNumber: String) {
+    fun loginWithFace(mobileNumber: String, deviceId: String, gateId: Int?) {
         if (_uiState.value.isLoggingIn) return
         _uiState.update { it.copy(isLoggingIn = true) }
         loginJob = viewModelScope.launch {
             val event = try {
                 val response = ApiClient.faceApi.getEmployeeFace(mobileNumber)
-                startSession(mobileNumber, response)
+                startSession(mobileNumber, response, deviceId, gateId)
                 LoginEvent.Success
             } catch (e: CancellationException) {
                 throw e
@@ -225,7 +249,12 @@ class FaceLivenessViewModel(
         }
     }
 
-    private suspend fun startSession(mobileNumber: String, response: EmployeeFaceResponse) {
+    private suspend fun startSession(
+        mobileNumber: String,
+        response: EmployeeFaceResponse,
+        deviceId: String,
+        gateId: Int?
+    ) {
         val face = response.face
         val embedding = face?.embedding.orEmpty()
         val config = response.matchConfig.toMatchConfig()
@@ -254,9 +283,13 @@ class FaceLivenessViewModel(
                 employeeName = name,
                 enrolledProfiles = listOf(profile),
                 matchConfig = config,
+                faceId = face?.faceId.orEmpty(),
+                deviceId = deviceId,
+                gateId = gateId,
                 selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
-                identityMatch = IdentityMatchResult()
+                identityMatch = IdentityMatchResult(),
+                matchResultMessage = null
             )
         }
     }
@@ -302,6 +335,8 @@ class FaceLivenessViewModel(
 
     fun logout() {
         loginJob?.cancel()
+        matchResultJob?.cancel()
+        pendingMatchResult = null
         cancelOfficeIn()
         _uiState.update {
             it.copy(
@@ -311,6 +346,11 @@ class FaceLivenessViewModel(
                 isLoggingIn = false,
                 enrolledProfiles = emptyList(),
                 matchConfig = MatchConfig(),
+                faceId = "",
+                deviceId = "",
+                gateId = null,
+                isPostingMatchResult = false,
+                matchResultMessage = null,
                 selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 verifiedCapturedBitmap = null,
@@ -356,6 +396,7 @@ class FaceLivenessViewModel(
                 }
                 return@launch
             }
+            val capturedAt = System.currentTimeMillis()
             _uiState.update {
                 it.copy(
                     currentScreen = AppScreen.VERIFICATION_SUCCESS,
@@ -363,11 +404,120 @@ class FaceLivenessViewModel(
                     isChallengeActive = false,
                     isMatchingIdentity = false,
                     verifiedCapturedBitmap = liveBmp ?: it.lastCapturedBitmap,
-                    officeInTimestamp = System.currentTimeMillis(),
+                    officeInTimestamp = capturedAt,
                     identityMatch = match
                 )
             }
             logVerificationEvent(wasMediaPipeMesh = true)
+            submitMatchResult(match, _uiState.value.verifiedCapturedBitmap, capturedAt)
+        }
+    }
+
+    private fun submitMatchResult(match: IdentityMatchResult, capture: Bitmap?, capturedAt: Long) {
+        val state = _uiState.value
+        matchResultJob?.cancel()
+        _uiState.update { it.copy(isPostingMatchResult = true, matchResultMessage = null) }
+        matchResultJob = viewModelScope.launch {
+            val request = MatchResultRequest(
+                event = EVENT_IN,
+                result = if (match.isMatch) RESULT_SUCCESS else RESULT_FAILURE,
+                faceId = state.faceId.ifBlank { state.enrolledProfiles.firstOrNull()?.id.orEmpty() },
+                cosineSimilarity = match.cosineSimilarity,
+                threshold = state.matchConfig.threshold,
+                liveness = LivenessPayload(
+                    passed = state.isLivenessVerified,
+                    challengesCompleted = state.challenges.filter { it.isCompleted }.map { it.type.name },
+                    spoofProbability = state.spoofResult.spoofProbability
+                ),
+                imageBase64 = capture?.let { encodeCaptureBase64(it) },
+                capturedAt = SimpleDateFormat(ISO_OFFSET_PATTERN, Locale.US).format(Date(capturedAt)),
+                device = DeviceInfoPayload(
+                    deviceId = state.deviceId.ifBlank { null },
+                    appVersion = BuildConfig.VERSION_NAME,
+                    gateId = state.gateId
+                )
+            )
+            pendingMatchResult = request
+            sendMatchResult(request)
+        }
+    }
+
+    /** Re-sends the last match result after a failed POST. */
+    fun retryMatchResult() {
+        val request = pendingMatchResult ?: return
+        if (_uiState.value.isPostingMatchResult) return
+        _uiState.update { it.copy(isPostingMatchResult = true, matchResultMessage = null) }
+        matchResultJob = viewModelScope.launch { sendMatchResult(request) }
+    }
+
+    fun dismissMatchResultMessage() {
+        _uiState.update { it.copy(matchResultMessage = null) }
+    }
+
+    private suspend fun sendMatchResult(request: MatchResultRequest) {
+        val message = try {
+            val response = ApiClient.faceApi.postMatchResult(request)
+            pendingMatchResult = null
+            response.toMessage(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            MatchResultMessage(
+                status = MatchResultStatus.FAILED,
+                title = "Office In not recorded",
+                message = describeMatchResultError(e)
+            )
+        }
+        _uiState.update {
+            it.copy(
+                isPostingMatchResult = false,
+                matchResultMessage = message.takeIf { _ -> it.currentScreen == AppScreen.VERIFICATION_SUCCESS }
+            )
+        }
+    }
+
+    private fun MatchResultResponse.toMessage(request: MatchResultRequest): MatchResultMessage {
+        val recorded = attendanceRecorded ?: (request.result == RESULT_SUCCESS)
+        return MatchResultMessage(
+            status = if (recorded) MatchResultStatus.RECORDED else MatchResultStatus.NOT_RECORDED,
+            title = if (recorded) "Attendance recorded" else "Attendance not recorded",
+            message = message?.takeIf { it.isNotBlank() }
+                ?: if (recorded) "Office In recorded" else "Face did not match. Office In was not recorded.",
+            details = listOfNotNull(
+                recordId?.let { "Record ID: $it" },
+                recordedAt?.let { "Recorded at: $it" }
+            )
+        )
+    }
+
+    private fun describeMatchResultError(e: Exception): String = when (e) {
+        is HttpException -> ApiClient.errorMessage(e)?.takeIf { it.isNotBlank() }
+            ?: "Server rejected the result (HTTP ${e.code()})"
+        is IOException -> "Cannot reach the server at ${ApiClient.baseUrl}"
+        is JsonDataException -> "Unexpected response from the server."
+        else -> e.message ?: "Could not send the match result."
+    }
+
+    private suspend fun encodeCaptureBase64(bitmap: Bitmap): String? = withContext(Dispatchers.Default) {
+        try {
+            val scale = (CAPTURE_MAX_SIDE.toFloat() / maxOf(bitmap.width, bitmap.height)).coerceAtMost(1f)
+            val scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * scale).toInt().coerceAtLeast(1),
+                    (bitmap.height * scale).toInt().coerceAtLeast(1),
+                    true
+                )
+            } else {
+                bitmap
+            }
+            val bytes = ByteArrayOutputStream().use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, CAPTURE_JPEG_QUALITY, out)
+                out.toByteArray()
+            }
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } catch (_: IllegalStateException) {
+            null
         }
     }
 
@@ -377,7 +527,8 @@ class FaceLivenessViewModel(
                 selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 verifiedCapturedBitmap = null,
-                identityMatch = IdentityMatchResult()
+                identityMatch = IdentityMatchResult(),
+                matchResultMessage = null
             )
         }
         startOfficeIn()
@@ -870,5 +1021,11 @@ class FaceLivenessViewModel(
 
     private companion object {
         const val ENROLLED_FACE_PREFIX = "enrolled_face_"
+        const val EVENT_IN = "IN"
+        const val RESULT_SUCCESS = "SUCCESS"
+        const val RESULT_FAILURE = "FAILURE"
+        const val ISO_OFFSET_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
+        const val CAPTURE_MAX_SIDE = 480
+        const val CAPTURE_JPEG_QUALITY = 85
     }
 }

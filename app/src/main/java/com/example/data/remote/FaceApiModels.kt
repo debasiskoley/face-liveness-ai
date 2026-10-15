@@ -71,6 +71,45 @@ data class DeviceResponse(
     val message: String? = null
 )
 
+@JsonClass(generateAdapter = true)
+data class MatchResultRequest(
+    val event: String,
+    val result: String,
+    val faceId: String,
+    val cosineSimilarity: Float? = null,
+    val threshold: Float? = null,
+    val liveness: LivenessPayload? = null,
+    val imageBase64: String? = null,
+    val capturedAt: String? = null,
+    val device: DeviceInfoPayload? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class LivenessPayload(
+    val passed: Boolean,
+    val challengesCompleted: List<String> = emptyList(),
+    val spoofProbability: Float? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class DeviceInfoPayload(
+    val deviceId: String? = null,
+    val appVersion: String? = null,
+    val gateId: Int? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MatchResultResponse(
+    val recordId: String? = null,
+    val employeeId: String? = null,
+    val gateId: Int? = null,
+    val event: String? = null,
+    val result: String? = null,
+    val attendanceRecorded: Boolean? = null,
+    val recordedAt: String? = null,
+    val message: String? = null
+)
+
 /** Covers both `{"message": ...}` and ASP.NET ProblemDetails / validation error bodies. */
 @JsonClass(generateAdapter = true)
 data class ApiErrorResponse(

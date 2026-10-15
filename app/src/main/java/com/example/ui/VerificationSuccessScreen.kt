@@ -33,14 +33,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -66,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.IdentityMatchResult
+import com.example.viewmodel.MatchResultMessage
+import com.example.viewmodel.MatchResultStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,8 +86,16 @@ fun VerificationSuccessScreen(
     identityMatch: IdentityMatchResult = IdentityMatchResult(),
     onNavigateBack: () -> Unit,
     onRestartVerification: () -> Unit,
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    isPostingMatchResult: Boolean = false,
+    matchResultMessage: MatchResultMessage? = null,
+    onDismissMatchResult: () -> Unit = {},
+    onRetryMatchResult: () -> Unit = {}
 ) {
+    matchResultMessage?.let {
+        MatchResultDialog(message = it, onDismiss = onDismissMatchResult, onRetry = onRetryMatchResult)
+    }
+
     val formattedTime = SimpleDateFormat("MMM dd, yyyy · hh:mm:ss a", Locale.getDefault())
         .format(Date(officeInTimestamp ?: System.currentTimeMillis()))
     val matched = identityMatch.isMatch
@@ -166,7 +182,7 @@ fun VerificationSuccessScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (matched) "OFFICE IN RECORDED" else "FACE NOT MATCHED",
+                        text = if (matched) "FACE MATCHED" else "FACE NOT MATCHED",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
@@ -200,6 +216,22 @@ fun VerificationSuccessScreen(
                             fontWeight = FontWeight.Bold,
                             color = AppSurface
                         )
+                    }
+
+                    if (isPostingMatchResult) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.testTag("match_result_posting")
+                        ) {
+                            CircularProgressIndicator(
+                                color = AppText,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Sending result to server…", fontSize = 12.sp, color = AppTextMuted)
+                        }
                     }
                 }
             }
@@ -400,4 +432,48 @@ fun VerificationSuccessScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+@Composable
+private fun MatchResultDialog(
+    message: MatchResultMessage,
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit
+) {
+    val (icon, tint) = when (message.status) {
+        MatchResultStatus.RECORDED -> Icons.Default.CheckCircle to AppSuccess
+        MatchResultStatus.NOT_RECORDED -> Icons.Default.Info to AppError
+        MatchResultStatus.FAILED -> Icons.Default.ErrorOutline to AppError
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AppSurface,
+        modifier = Modifier.testTag("match_result_dialog"),
+        icon = { Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(40.dp)) },
+        title = { Text(text = message.title, color = AppText, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(text = message.message, color = AppText)
+                message.details.forEach { Text(text = it, color = AppTextMuted, fontSize = 13.sp) }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = AppButton, contentColor = AppText),
+                modifier = Modifier.testTag("match_result_ok_button")
+            ) {
+                Text(text = "OK", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = if (message.status == MatchResultStatus.FAILED) {
+            {
+                TextButton(onClick = onRetry, colors = ButtonDefaults.textButtonColors(contentColor = AppText)) {
+                    Text(text = "Retry")
+                }
+            }
+        } else {
+            null
+        }
+    )
 }

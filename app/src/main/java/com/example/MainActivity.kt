@@ -183,7 +183,11 @@ fun FaceLivenessRoot(
                     onDismiss = { mobileAction = null },
                     onConfirm = { mobile ->
                         when (action) {
-                            MobileAction.LOGIN_WITH_FACE -> viewModel.loginWithFace(mobile)
+                            MobileAction.LOGIN_WITH_FACE -> viewModel.loginWithFace(
+                                mobileNumber = mobile,
+                                deviceId = deviceState.deviceId,
+                                gateId = deviceState.registeredGate?.gateId
+                            )
                             MobileAction.ENROLL_FACE -> {
                                 mobileAction = null
                                 enrollViewModel.reset()
@@ -270,7 +274,11 @@ fun FaceLivenessApp(
                 identityMatch = uiState.identityMatch,
                 onNavigateBack = { viewModel.navigateToScreen(AppScreen.MAIN_DASHBOARD) },
                 onRestartVerification = { viewModel.restartVerificationFlow() },
-                onLogout = onLogout
+                onLogout = onLogout,
+                isPostingMatchResult = uiState.isPostingMatchResult,
+                matchResultMessage = uiState.matchResultMessage,
+                onDismissMatchResult = viewModel::dismissMatchResultMessage,
+                onRetryMatchResult = viewModel::retryMatchResult
             )
         }
 
