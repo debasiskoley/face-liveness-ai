@@ -455,13 +455,7 @@ fun FaceLivenessApp(
 
                         AppTab.SETTINGS -> {
                             SettingsScreen(
-                                employeeName = uiState.employeeName,
-                                employeeId = uiState.employeeId,
-                                mobileNumber = uiState.mobileNumber,
                                 matchConfig = uiState.matchConfig,
-                                serverUrl = ApiClient.baseUrl,
-                                onLogout = onLogout,
-                                showLogout = !uiState.isRecognizeMode
                             )
                         }
                     }

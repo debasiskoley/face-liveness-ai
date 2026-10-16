@@ -42,14 +42,7 @@ import java.util.Locale
 
 @Composable
 fun SettingsScreen(
-    employeeName: String,
-    employeeId: String,
-    mobileNumber: String,
     matchConfig: MatchConfig,
-    serverUrl: String,
-    onLogout: () -> Unit,
-    /** Logout only for Login with Face (mobile). Hidden for Start Recognize (list match). */
-    showLogout: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -60,89 +53,37 @@ fun SettingsScreen(
             .testTag("settings_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SettingsSection(title = "Account") {
-            if (employeeName.isNotBlank()) {
-                SettingsRow(label = "Name", value = employeeName)
-                SettingsDivider()
-            }
-            if (employeeId.isNotBlank()) {
-                SettingsRow(label = "Employee ID", value = employeeId)
-                SettingsDivider()
-            }
-            SettingsRow(
-                label = "Mobile number",
-                value = if (mobileNumber.isBlank()) "Not signed in" else "+91 $mobileNumber"
+        Column {
+            Text(
+                text = "Match Configuration",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = AppText,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
             )
-        }
-
-        SettingsSection(title = "Match Config") {
-            SettingsRow(label = "Match threshold (cosine)", value = formatDecimal(matchConfig.threshold))
-            SettingsDivider()
-            SettingsRow(
-                label = "Max spoof probability",
-                value = formatDecimal(matchConfig.maxSpoofProbability)
-            )
-            SettingsDivider()
-            SettingsRow(
-                label = "Required challenges",
-                value = matchConfig.requiredChallenges.joinToString(", ") { it.name }
-            )
-            SettingsDivider()
-            SettingsRow(label = "Embedding model", value = matchConfig.embeddingModel)
-            SettingsDivider()
-            SettingsRow(label = "Embedding size", value = "${matchConfig.embeddingDim}-D")
-            SettingsDivider()
-            SettingsRow(label = "Anti-spoof model", value = matchConfig.padModel)
-        }
-
-        SettingsSection(title = "Server") {
-            SettingsRow(label = "API base URL", value = serverUrl)
-        }
-
-        if (showLogout) {
-            Spacer(modifier = Modifier.height(4.dp))
-
-            OutlinedButton(
-                onClick = onLogout,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .testTag("logout_button"),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = AppSurface,
+                border = BorderStroke(1.dp, AppBorder)
             ) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Logout", fontWeight = FontWeight.SemiBold)
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    SettingsRow(
+                        label = "Match threshold (cosine)",
+                        value = formatDecimal(matchConfig.threshold)
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        label = "Max spoof probability",
+                        value = formatDecimal(matchConfig.maxSpoofProbability)
+                    )
+                }
             }
         }
     }
 }
 
-@Composable
-private fun SettingsSection(title: String, content: @Composable () -> Unit) {
-    Column {
-        Text(
-            text = title.uppercase(Locale.ROOT),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = AppText,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-        )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = AppSurface,
-            border = BorderStroke(1.dp, AppBorder)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                content()
-            }
-        }
-    }
-}
 
 @Composable
 private fun SettingsRow(label: String, value: String) {
