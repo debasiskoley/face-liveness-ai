@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,6 +55,7 @@ import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "CameraViewfinder"
 
@@ -71,24 +73,114 @@ fun CameraViewfinderView(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // MediaPipe Face Landmarker Helper
     val mediaPipeHelper = remember { MediaPipeFaceLandmarkerHelper(context) }
     val cameraSession = remember { CameraSession() }
+    val previewView = remember {
+        PreviewView(context).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+
+    val latestFrontCamera by rememberUpdatedState(isFrontCamera)
+    val latestMediaPipe by rememberUpdatedState(onMediaPipeDetected)
+    val latestFace by rememberUpdatedState(onFaceDetected)
+
+    // Tear down helpers only when this composable leaves the tree.
     DisposableEffect(Unit) {
+        val faceDetectorOptions = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+            .setMinFaceSize(0.15f)
+            .enableTracking()
+            .build()
+        cameraSession.faceDetector = FaceDetection.getClient(faceDetectorOptions)
+
         onDispose {
-            // Bound to the Activity lifecycle, so the camera stays on unless released here.
             cameraSession.analysis?.clearAnalyzer()
             cameraSession.provider?.unbindAll()
             cameraSession.provider = null
             cameraSession.analysis = null
             val detector = cameraSession.faceDetector
             cameraSession.faceDetector = null
-            // Runs after any in-flight frame on the single analysis thread.
             cameraSession.executor.execute {
                 detector?.close()
                 mediaPipeHelper.close()
             }
             cameraSession.executor.shutdown()
+        }
+    }
+
+    // Rebind CameraX whenever front/back changes (factory alone only ran once before).
+    DisposableEffect(isFrontCamera, isSimulationMode, lifecycleOwner) {
+        if (isSimulationMode || cameraSession.executor.isShutdown) {
+            onDispose { }
+        } else {
+            val mainExecutor = ContextCompat.getMainExecutor(context)
+            val cancelled = AtomicBoolean(false)
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+
+            cameraProviderFuture.addListener({
+                if (cancelled.get() || cameraSession.executor.isShutdown) return@addListener
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    cameraSession.provider = cameraProvider
+                    cameraSession.analysis?.clearAnalyzer()
+                    cameraProvider.unbindAll()
+
+                    val preview = Preview.Builder().build().also {
+                        it.surfaceProvider = previewView.surfaceProvider
+                    }
+                    val cameraSelector = if (isFrontCamera) {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    } else {
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    }
+                    val imageAnalysis = ImageAnalysis.Builder()
+                        .setTargetResolution(android.util.Size(480, 640))
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                        .build()
+                    val faceDetector = cameraSession.faceDetector
+                        ?: return@addListener
+
+                    cameraSession.analysis = imageAnalysis
+                    imageAnalysis.setAnalyzer(cameraSession.executor) { imageProxy ->
+                        processCameraFrame(
+                            imageProxy = imageProxy,
+                            mediaPipeHelper = mediaPipeHelper,
+                            faceDetector = faceDetector,
+                            isFrontCamera = latestFrontCamera,
+                            onMediaPipeResult = latestMediaPipe,
+                            onFaceResult = latestFace
+                        )
+                    }
+
+                    if (!cameraProvider.hasCamera(cameraSelector)) {
+                        Log.w(TAG, "Requested camera not available: front=$isFrontCamera")
+                        return@addListener
+                    }
+
+                    mediaPipeHelper.reset()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        preview,
+                        imageAnalysis
+                    )
+                    Log.i(TAG, "Camera bound front=$isFrontCamera")
+                } catch (e: Exception) {
+                    Log.e(TAG, "CameraX bind failed (front=$isFrontCamera)", e)
+                }
+            }, mainExecutor)
+
+            onDispose {
+                cancelled.set(true)
+                cameraSession.analysis?.clearAnalyzer()
+                cameraSession.analysis = null
+                cameraSession.provider?.unbindAll()
+            }
         }
     }
 
@@ -107,82 +199,13 @@ fun CameraViewfinderView(
     Box(modifier = modifier.fillMaxSize().testTag("camera_viewfinder_container")) {
         if (!isSimulationMode) {
             AndroidView(
-                modifier = Modifier.fillMaxSize().testTag("camera_preview_surface"),
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx).apply {
-                        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                        scaleType = PreviewView.ScaleType.FILL_CENTER
-                    }
-
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                    val cameraExecutor = cameraSession.executor
-
-                    val faceDetectorOptions = FaceDetectorOptions.Builder()
-                        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-                        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-                        .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-                        .setMinFaceSize(0.15f)
-                        .enableTracking()
-                        .build()
-
-                    val faceDetector = FaceDetection.getClient(faceDetectorOptions)
-                    cameraSession.faceDetector = faceDetector
-
-                    cameraProviderFuture.addListener({
-                        if (cameraSession.executor.isShutdown) return@addListener
-                        try {
-                            val cameraProvider = cameraProviderFuture.get()
-                            cameraSession.provider = cameraProvider
-                            val preview = Preview.Builder().build().also {
-                                it.surfaceProvider = previewView.surfaceProvider
-                            }
-
-                            val cameraSelector = if (isFrontCamera) {
-                                CameraSelector.DEFAULT_FRONT_CAMERA
-                            } else {
-                                CameraSelector.DEFAULT_BACK_CAMERA
-                            }
-
-                            // Smaller analysis frames keep MediaPipe + blink tracking responsive on CPU.
-                            val imageAnalysis = ImageAnalysis.Builder()
-                                .setTargetResolution(android.util.Size(480, 640))
-                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                                .build()
-
-                            cameraSession.analysis = imageAnalysis
-                            imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                                processCameraFrame(
-                                    imageProxy = imageProxy,
-                                    mediaPipeHelper = mediaPipeHelper,
-                                    faceDetector = faceDetector,
-                                    isFrontCamera = isFrontCamera,
-                                    onMediaPipeResult = onMediaPipeDetected,
-                                    onFaceResult = onFaceDetected
-                                )
-                            }
-
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                cameraSelector,
-                                preview,
-                                imageAnalysis
-                            )
-                        } catch (e: Exception) {
-                            Log.e(TAG, "CameraX initialization failed", e)
-                        }
-                    }, ContextCompat.getMainExecutor(ctx))
-
-                    previewView
-                }
+                factory = { previewView },
+                modifier = Modifier.fillMaxSize().testTag("camera_preview_surface")
             )
         } else {
-            // Simulated camera background
             SimulatedViewfinderCanvas(metrics = metrics)
         }
 
-        // Biometric Scanning Oval, Reticles, and MediaPipe 468-point Face Mesh Wireframe
         BiometricOverlayCanvas(
             metrics = metrics,
             spoofResult = spoofResult,

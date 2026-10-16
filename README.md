@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Android app for **office attendance** with on-device face liveness, anti-spoofing, and identity matching. Tap **Office In**, complete active challenges in front of the camera, and match against enrolled employee profiles stored locally.
+Android app for **office attendance** with on-device face liveness, anti-spoofing, and identity matching. Tap **Mark Presence**, complete active challenges in front of the camera, and match against enrolled employee profiles stored locally.
 
 | | |
 |---|---|
@@ -18,7 +18,7 @@ Android app for **office attendance** with on-device face liveness, anti-spoofin
 
 ## Features
 
-- **Office In flow** — guided active liveness (center face, blink, smile, turn, nod)
+- **Record Presence flow** — guided active liveness (center face, blink, smile, turn, nod)
 - **Passive anti-spoof** — MiniFASNetV2 print / replay detection on live frames
 - **Identity match** — ArcFace embeddings compared to enrolled templates
 - **Profiles** — enroll / edit / delete people with photo and contact details
@@ -80,7 +80,7 @@ app/src/main/java/com/example/
 
 ---
 
-## Office In flow
+## Record Presence flow
 
 ```mermaid
 sequenceDiagram
@@ -93,7 +93,7 @@ sequenceDiagram
   participant AF as ArcFace
   participant DB as Room
 
-  User->>Home: Tap Office In
+  User->>Home: Tap Mark Presence
   Home->>VM: startOfficeIn()
   VM->>VM: Init challenge queue
   loop Each camera frame
@@ -120,7 +120,7 @@ flowchart LR
   E --> F{PAD: live?}
   F -->|Yes| G[ArcFace match]
   F -->|Spoof| H[Reject / retry]
-  G --> I[Office In success]
+  G --> I[Record Presence success]
 ```
 
 ---
@@ -141,11 +141,11 @@ ONNX runs via **ONNX Runtime Android**. MediaPipe uses the CPU delegate for broa
 
 ## Screens
 
-| Tab / screen | Purpose |
-|--------------|---------|
-| **Home** | Idle attendance card → Office In camera + challenge UI |
-| **Profile** | List / add / edit / delete enrolled identities |
-| **Verification success** | Captured frame, timestamp, match score |
+| Tab / screen | Purpose                                                     |
+|--------------|-------------------------------------------------------------|
+| **Home** | Idle attendance card → Check Presence camera + challenge UI |
+| **Profile** | List / add / edit / delete enrolled identities              |
+| **Verification success** | Captured frame, timestamp, match score                      |
 
 ---
 
@@ -210,7 +210,7 @@ Debug signing uses `debug.keystore` at the repo root (generated automatically if
 ## Notes
 
 - First launch requests camera permission; without it the app can fall back to a **simulation** path for UI testing.
-- Identity matching quality depends on enrolled photo quality and lighting during Office In.
+- Identity matching quality depends on enrolled photo quality and lighting during Mark Presence.
 - On low-RAM / Go editions, prefer a mid-tier or newer device for smoother MediaPipe + ORT performance.
 
 ---

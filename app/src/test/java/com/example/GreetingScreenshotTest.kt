@@ -25,10 +25,11 @@ class GreetingScreenshotTest {
   fun greeting_screenshot() {
     val app = ApplicationProvider.getApplicationContext<Application>()
     val viewModel = com.example.viewmodel.FaceLivenessViewModel(app)
+    val deviceViewModel = com.example.viewmodel.DeviceRegistrationViewModel(app)
     viewModel.enableSimulationMode(true)
     composeTestRule.setContent {
       MyApplicationTheme {
-        FaceLivenessApp(viewModel = viewModel)
+        FaceLivenessApp(viewModel = viewModel, deviceViewModel = deviceViewModel)
       }
     }
 

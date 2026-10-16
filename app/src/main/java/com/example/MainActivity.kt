@@ -4,7 +4,6 @@ import com.example.ui.theme.AppBackground
 import com.example.ui.theme.AppButton
 import com.example.ui.theme.AppSurface
 import com.example.ui.theme.AppText
-import com.example.ui.theme.AppTextMuted
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -28,15 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlipCameraAndroid
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,7 +66,6 @@ import com.example.ui.VerificationSuccessScreen
 import com.example.ui.WelcomeScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.AppScreen
-import com.example.viewmodel.AppTab
 import com.example.viewmodel.DeviceRegistrationViewModel
 import com.example.viewmodel.EnrollFaceViewModel
 import com.example.viewmodel.FaceLivenessViewModel
@@ -107,6 +100,7 @@ class MainActivity : ComponentActivity() {
 private enum class AppRoute {
     SPLASH,
     WELCOME,
+    SETTINGS,
     ENROLL_FACE,
     DASHBOARD
 }
@@ -184,21 +178,9 @@ fun FaceLivenessRoot(
                 isCheckingDevice = checkingDevice,
                 isStartingRecognize = startingRecognize,
                 onEnrollFace = { mobileAction = MobileAction.ENROLL_FACE },
-                onRegisterDevice = {
-                    deviceViewModel.open()
-                    showRegisterDevice = true
-                },
+                onOpenSettings = { route = AppRoute.SETTINGS },
                 registeredGateName = deviceState.registeredGate?.gateName
             )
-            if (showRegisterDevice) {
-                RegisterDeviceDialog(
-                    state = deviceState,
-                    onSelectGate = deviceViewModel::selectGate,
-                    onRegister = deviceViewModel::register,
-                    onRetryLoad = deviceViewModel::loadGates,
-                    onDismiss = { showRegisterDevice = false }
-                )
-            }
             mobileAction?.let { action ->
                 MobileNumberDialog(
                     action = action,
@@ -219,6 +201,30 @@ fun FaceLivenessRoot(
                             }
                         }
                     }
+                )
+            }
+        }
+
+        AppRoute.SETTINGS -> {
+            BackHandler { route = AppRoute.WELCOME }
+            SettingsScreen(
+                matchConfig = uiState.matchConfig,
+                registeredGateName = deviceState.registeredGate?.gateName,
+                onThresholdChange = viewModel::updateMatchThreshold,
+                onMaxSpoofChange = viewModel::updateMaxSpoofProbability,
+                onRegisterDevice = {
+                    deviceViewModel.open()
+                    showRegisterDevice = true
+                },
+                onBack = { route = AppRoute.WELCOME }
+            )
+            if (showRegisterDevice) {
+                RegisterDeviceDialog(
+                    state = deviceState,
+                    onSelectGate = deviceViewModel::selectGate,
+                    onRegister = deviceViewModel::register,
+                    onRetryLoad = deviceViewModel::loadGates,
+                    onDismiss = { showRegisterDevice = false }
                 )
             }
         }
@@ -340,11 +346,7 @@ fun FaceLivenessApp(
                                         color = AppText
                                     )
                                     Text(
-                                        text = if (uiState.selectedTab == AppTab.HOME) {
-                                            "Home · Office In"
-                                        } else {
-                                            "Settings"
-                                        },
+                                        text = "Home · Mark Presence",
                                         fontSize = 10.sp,
                                         color = AppText
                                     )
@@ -369,53 +371,6 @@ fun FaceLivenessApp(
                             containerColor = AppSurface
                         )
                     )
-                },
-                bottomBar = {
-                    NavigationBar(
-                        containerColor = AppSurface,
-                        tonalElevation = 8.dp,
-                        modifier = Modifier.testTag("bottom_nav_bar")
-                    ) {
-                        NavigationBarItem(
-                            selected = uiState.selectedTab == AppTab.HOME,
-                            onClick = { viewModel.setTab(AppTab.HOME) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = "Home"
-                                )
-                            },
-                            label = { Text("Home") },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = AppText,
-                                selectedTextColor = AppText,
-                                indicatorColor = AppButton,
-                                unselectedIconColor = AppTextMuted,
-                                unselectedTextColor = AppTextMuted
-                            ),
-                            modifier = Modifier.testTag("tab_home")
-                        )
-
-                        NavigationBarItem(
-                            selected = uiState.selectedTab == AppTab.SETTINGS,
-                            onClick = { viewModel.setTab(AppTab.SETTINGS) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Settings"
-                                )
-                            },
-                            label = { Text("Settings") },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = AppText,
-                                selectedTextColor = AppText,
-                                indicatorColor = AppButton,
-                                unselectedIconColor = AppTextMuted,
-                                unselectedTextColor = AppTextMuted
-                            ),
-                            modifier = Modifier.testTag("tab_settings")
-                        )
-                    }
                 }
             ) { innerPadding ->
                 Box(
@@ -423,42 +378,31 @@ fun FaceLivenessApp(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (uiState.selectedTab) {
-                        AppTab.HOME -> {
-                            HomeScreen(
-                                isOfficeInActive = uiState.isOfficeInActive,
-                                isFrontCamera = uiState.isFrontCamera,
-                                isSimulationMode = uiState.isSimulationMode,
-                                metrics = uiState.metrics,
-                                spoofResult = uiState.spoofResult,
-                                isLivenessVerified = uiState.isLivenessVerified,
-                                isMatchingIdentity = uiState.isMatchingIdentity,
-                                challenges = uiState.challenges,
-                                currentChallengeIndex = uiState.currentChallengeIndex,
-                                challengeStatusText = uiState.challengeStatusText,
-                                lastOfficeInTimestamp = uiState.officeInTimestamp,
-                                registeredGateName = uiDevice.registeredGate?.gateName,
-                                onOfficeInClick = { viewModel.startOfficeIn() },
-                                onCancelOfficeIn = { viewModel.cancelOfficeIn() },
-                                onRestartChallenges = { viewModel.resetChallenges() },
-                                onToggleCameraFacing = { viewModel.toggleCameraFacing() },
-                                onMediaPipeDetected = { mpResult, bmp ->
-                                    viewModel.onMediaPipeDetected(mpResult, bmp)
-                                },
-                                onFaceDetected = { face, w, h, bmp ->
-                                    viewModel.onFaceDetected(face, w, h, bmp)
-                                },
-                                onLogout = onLogout,
-                                showLogout = uiState.isRecognizeMode
-                            )
-                        }
-
-                        AppTab.SETTINGS -> {
-                            SettingsScreen(
-                                matchConfig = uiState.matchConfig,
-                            )
-                        }
-                    }
+                    HomeScreen(
+                        isOfficeInActive = uiState.isOfficeInActive,
+                        isFrontCamera = uiState.isFrontCamera,
+                        isSimulationMode = uiState.isSimulationMode,
+                        metrics = uiState.metrics,
+                        spoofResult = uiState.spoofResult,
+                        isLivenessVerified = uiState.isLivenessVerified,
+                        isMatchingIdentity = uiState.isMatchingIdentity,
+                        challenges = uiState.challenges,
+                        currentChallengeIndex = uiState.currentChallengeIndex,
+                        challengeStatusText = uiState.challengeStatusText,
+                        lastOfficeInTimestamp = uiState.officeInTimestamp,
+                        registeredGateName = uiDevice.registeredGate?.gateName,
+                        onOfficeInClick = { viewModel.startOfficeIn() },
+                        onCancelOfficeIn = { viewModel.cancelOfficeIn() },
+                        onRestartChallenges = { viewModel.resetChallenges() },
+                        onToggleCameraFacing = { viewModel.toggleCameraFacing() },
+                        onMediaPipeDetected = { mpResult, bmp ->
+                            viewModel.onMediaPipeDetected(mpResult, bmp)
+                        },
+                        onFaceDetected = { face, w, h, bmp ->
+                            viewModel.onFaceDetected(face, w, h, bmp)
+                        },
+                        onLogout = onLogout,
+                    )
                 }
             }
         }

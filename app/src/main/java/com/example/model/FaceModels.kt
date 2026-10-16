@@ -148,18 +148,12 @@ data class BiometricVector(
 }
 
 /**
- * Rules used to accept a live face against the employee's server face template.
+ * In-app match rules. The /api/employees/face response no longer includes matchConfig.
  */
 data class MatchConfig(
     val threshold: Float = 0.40f,
     val maxSpoofProbability: Float = 0.35f,
-    val requiredChallenges: List<ChallengeType> = listOf(
-        ChallengeType.CENTER_FACE,
-        ChallengeType.BLINK_EYES
-    ),
-    val embeddingModel: String = "arcface-w600k_mbf",
-    val embeddingDim: Int = 512,
-    val padModel: String = "MiniFASNetV2"
+    val embeddingDim: Int = 512
 )
 
 /**

@@ -213,7 +213,7 @@ fun LivenessChallengeCard(
                                 "Warning: Potential presentation attack detected"
                             }
                         } else if (isLivenessVerified) {
-                            "Office In liveness confirmed"
+                            "Presence record liveness confirmed"
                         } else {
                             currentStep?.type?.title ?: "Face Verification"
                         },

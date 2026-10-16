@@ -87,7 +87,6 @@ fun HomeScreen(
     onMediaPipeDetected: (MediaPipeFaceLandmarkerHelper.MediaPipeAnalysisResult, Bitmap?) -> Unit,
     onFaceDetected: (Face?, Int, Int, Bitmap?) -> Unit,
     onLogout: () -> Unit,
-    showLogout: Boolean = true
 ) {
     if (isOfficeInActive) {
         OfficeInLivenessFragment(
@@ -109,10 +108,9 @@ fun HomeScreen(
     } else {
         OfficeInIdleFragment(
             lastOfficeInTimestamp = lastOfficeInTimestamp,
-            registeredGateName= registeredGateName,
+            registeredGateName = registeredGateName,
             onOfficeInClick = onOfficeInClick,
             onLogout = onLogout,
-            showLogout = showLogout
         )
     }
 }
@@ -123,7 +121,6 @@ private fun OfficeInIdleFragment(
     registeredGateName: String? = null,
     onOfficeInClick: () -> Unit,
     onLogout: () -> Unit,
-    showLogout: Boolean = true,
 ) {
     val todayLabel = SimpleDateFormat("EEEE, MMM dd yyyy", Locale.getDefault()).format(Date())
     val lastCheckIn = lastOfficeInTimestamp?.let {
@@ -141,13 +138,13 @@ private fun OfficeInIdleFragment(
         Column {
 
             if (registeredGateName != null) {
-            Text(
-                text = "Assembly point at $registeredGateName",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                color = AppText
-            )
+                Text(
+                    text = "Assembly point at $registeredGateName",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp,
+                    color = AppText
+                )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -206,7 +203,7 @@ private fun OfficeInIdleFragment(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Office In: Make sure to center your face and Blink Eye properly",
+                        text = "Register Presence: Make sure to center your face and Blink Eye properly",
                         fontSize = 13.sp,
                         color = AppTextMuted,
                         textAlign = TextAlign.Center,
@@ -241,27 +238,26 @@ private fun OfficeInIdleFragment(
                 }
             }
 
-            if (showLogout) {
-                TextButton(
-                    onClick = onLogout,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp)
-                        .testTag("back_button"),
+
+            TextButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .testTag("back_button"),
 //                shape = RoundedCornerShape(14.dp),
 //                border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
-                ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Back to Login", fontWeight = FontWeight.SemiBold)
-                }
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Back to Login", fontWeight = FontWeight.SemiBold)
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
 //
 //        Text(
-//            text = "Camera opens only after you tap Office In.",
+//            text = "Camera opens only after you tap Record My Presence.",
 //            fontSize = 12.sp,
 //            color = AppText,
 //            textAlign = TextAlign.Center,
@@ -347,7 +343,7 @@ private fun OfficeInLivenessFragment(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Office In · Liveness",
+                        text = "Presence Record · Liveness",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppText
@@ -365,7 +361,7 @@ private fun OfficeInLivenessFragment(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel Office In",
+                    contentDescription = "Cancel record presence",
                     tint = AppText
                 )
             }

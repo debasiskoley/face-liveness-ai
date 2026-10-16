@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
@@ -13,7 +14,6 @@ import com.example.data.remote.ApiClient
 import com.example.data.remote.DeviceInfoPayload
 import com.example.data.remote.EmployeeFaceResponse
 import com.example.data.remote.LivenessPayload
-import com.example.data.remote.MatchConfigDto
 import com.example.data.remote.MatchResultRequest
 import com.example.data.remote.MatchResultResponse
 import com.example.mediapipe.MediaPipeFaceLandmarkerHelper
@@ -64,14 +64,8 @@ enum class AppScreen {
     VERIFICATION_SUCCESS
 }
 
-enum class AppTab {
-    HOME,
-    SETTINGS
-}
-
 data class FaceLivenessUiState(
     val currentScreen: AppScreen = AppScreen.MAIN_DASHBOARD,
-    val selectedTab: AppTab = AppTab.HOME,
     val isFrontCamera: Boolean = true,
     val hasCameraPermission: Boolean = false,
     val isSimulationMode: Boolean = false,
@@ -88,7 +82,7 @@ data class FaceLivenessUiState(
     val isChallengeActive: Boolean = false,
     val isLivenessVerified: Boolean = false,
     val isOfficeInActive: Boolean = false,
-    val challengeStatusText: String = "Tap Office In to begin",
+    val challengeStatusText: String = "Tap Mark Presence to begin",
     val officeInTimestamp: Long? = null,
     val identityMatch: IdentityMatchResult = IdentityMatchResult(),
     val isMatchingIdentity: Boolean = false,
@@ -138,8 +132,12 @@ class FaceLivenessViewModel(
 
     private val biometricEngine: FaceBiometricEngine = FaceBiometricEngine()
     private val identityEmbedder: ArcFaceEmbedder by lazy { ArcFaceEmbedder.getInstance(application) }
+    private val settingsPrefs =
+        application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _uiState = MutableStateFlow(FaceLivenessUiState())
+    private val _uiState = MutableStateFlow(
+        FaceLivenessUiState(matchConfig = loadMatchConfig())
+    )
     val uiState: StateFlow<FaceLivenessUiState> = _uiState.asStateFlow()
 
     private val _loginEvents = Channel<LoginEvent>(Channel.BUFFERED)
@@ -161,11 +159,35 @@ class FaceLivenessViewModel(
         viewModelScope.launch(Dispatchers.Default) { identityEmbedder }
     }
 
-    fun setTab(tab: AppTab) {
-        if (tab != AppTab.HOME && _uiState.value.isOfficeInActive) {
-            cancelOfficeIn()
-        }
-        _uiState.update { it.copy(selectedTab = tab) }
+    fun updateMatchThreshold(value: Float) {
+        val threshold = value.coerceIn(MATCH_SLIDER_MIN, MATCH_SLIDER_MAX)
+        val config = _uiState.value.matchConfig.copy(threshold = threshold)
+        persistMatchConfig(config)
+        _uiState.update { it.copy(matchConfig = config) }
+    }
+
+    fun updateMaxSpoofProbability(value: Float) {
+        val maxSpoof = value.coerceIn(MATCH_SLIDER_MIN, MATCH_SLIDER_MAX)
+        val config = _uiState.value.matchConfig.copy(maxSpoofProbability = maxSpoof)
+        persistMatchConfig(config)
+        _uiState.update { it.copy(matchConfig = config) }
+    }
+
+    private fun loadMatchConfig(): MatchConfig {
+        val defaults = MatchConfig()
+        return defaults.copy(
+            threshold = settingsPrefs.getFloat(KEY_THRESHOLD, defaults.threshold)
+                .coerceIn(MATCH_SLIDER_MIN, MATCH_SLIDER_MAX),
+            maxSpoofProbability = settingsPrefs.getFloat(KEY_MAX_SPOOF, defaults.maxSpoofProbability)
+                .coerceIn(MATCH_SLIDER_MIN, MATCH_SLIDER_MAX)
+        )
+    }
+
+    private fun persistMatchConfig(config: MatchConfig) {
+        settingsPrefs.edit()
+            .putFloat(KEY_THRESHOLD, config.threshold)
+            .putFloat(KEY_MAX_SPOOF, config.maxSpoofProbability)
+            .apply()
     }
 
     fun toggleCameraLens() {
@@ -204,7 +226,7 @@ class FaceLivenessViewModel(
         officeInCompleteJob?.cancel()
         officeInCompleteJob = null
         resetBlinkTracker()
-        _uiState.update { it.copy(selectedTab = AppTab.HOME, currentScreen = AppScreen.MAIN_DASHBOARD) }
+        _uiState.update { it.copy(currentScreen = AppScreen.MAIN_DASHBOARD) }
         if (!_uiState.value.hasCameraPermission && !_uiState.value.isSimulationMode) {
             enableSimulationMode(true)
         }
@@ -224,7 +246,7 @@ class FaceLivenessViewModel(
                 isLivenessVerified = false,
                 challenges = emptyList(),
                 currentChallengeIndex = 0,
-                challengeStatusText = "Tap Office In to begin"
+                challengeStatusText = "Tap Mark Presence to begin"
             )
         }
     }
@@ -257,7 +279,7 @@ class FaceLivenessViewModel(
 
     /**
      * Loads every enrolled face from GET /api/employees/face (no mobileNumber), then opens the
-     * dashboard. Office In matches 1:N against that list.
+     * dashboard. Record presence matches 1:N against that list.
      */
     fun startRecognize(deviceId: String, gateId: Int?) {
         if (_uiState.value.isLoggingIn) return
@@ -284,7 +306,7 @@ class FaceLivenessViewModel(
     ) {
         val face = response.face
         val embedding = face?.embedding.orEmpty()
-        val config = response.matchConfig.toMatchConfig()
+        val config = _uiState.value.matchConfig
         if (embedding.isEmpty()) throw IllegalStateException("No face enrolled for this mobile number.")
         if (embedding.size != config.embeddingDim) {
             throw IllegalStateException(
@@ -310,12 +332,10 @@ class FaceLivenessViewModel(
                 employeeId = employee?.employeeId.orEmpty(),
                 employeeName = name,
                 enrolledProfiles = listOf(profile),
-                matchConfig = config,
                 faceId = face?.faceId.orEmpty(),
                 deviceId = deviceId,
                 gateId = gateId,
                 isRecognizeMode = false,
-                selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 identityMatch = IdentityMatchResult(),
                 matchResultMessage = null
@@ -330,15 +350,12 @@ class FaceLivenessViewModel(
         }
 
         clearEnrolledFacePhotos()
-        val defaults = MatchConfig()
-        var config = defaults
+        val config = _uiState.value.matchConfig
         val profiles = ArrayList<EnrolledProfile>()
         for (response in responses) {
             val face = response.face ?: continue
             val embedding = face.embedding.orEmpty()
-            val entryConfig = response.matchConfig.toMatchConfig()
-            if (embedding.size != entryConfig.embeddingDim) continue
-            if (profiles.isEmpty()) config = entryConfig
+            if (embedding.size != config.embeddingDim) continue
 
             val employee = response.employee
             val faceId = face.faceId?.takeIf { it.isNotBlank() }
@@ -361,7 +378,7 @@ class FaceLivenessViewModel(
         }
         if (profiles.isEmpty()) {
             throw IllegalStateException(
-                "No usable ${defaults.embeddingDim}-D face templates found. Re-enroll faces on the server."
+                "No usable ${config.embeddingDim}-D face templates found. Re-enroll faces on the server."
             )
         }
 
@@ -371,31 +388,15 @@ class FaceLivenessViewModel(
                 employeeId = "",
                 employeeName = "Recognize · ${profiles.size} faces",
                 enrolledProfiles = profiles,
-                matchConfig = config,
                 faceId = "",
                 deviceId = deviceId,
                 gateId = gateId,
                 isRecognizeMode = true,
-                selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 identityMatch = IdentityMatchResult(),
                 matchResultMessage = null
             )
         }
-    }
-
-    private fun MatchConfigDto?.toMatchConfig(): MatchConfig {
-        val defaults = MatchConfig()
-        if (this == null) return defaults
-        val challenges = requiredChallenges.orEmpty().mapNotNull { name ->
-            ChallengeType.entries.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
-        }
-        return defaults.copy(
-            threshold = threshold?.takeIf { it > 0f && it <= 1f } ?: defaults.threshold,
-            maxSpoofProbability = maxSpoofProbability?.takeIf { it > 0f && it <= 1f }
-                ?: defaults.maxSpoofProbability,
-            requiredChallenges = challenges.distinct().ifEmpty { defaults.requiredChallenges }
-        )
     }
 
     /** Writes the server face crop to cache so the result screen can show it; returns a file URI. */
@@ -445,14 +446,14 @@ class FaceLivenessViewModel(
                 employeeName = "",
                 isLoggingIn = false,
                 enrolledProfiles = emptyList(),
-                matchConfig = MatchConfig(),
+                // Keep the user-edited match config from Settings.
+                matchConfig = loadMatchConfig(),
                 faceId = "",
                 deviceId = "",
                 gateId = null,
                 isRecognizeMode = false,
                 isPostingMatchResult = false,
                 matchResultMessage = null,
-                selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 verifiedCapturedBitmap = null,
                 identityMatch = IdentityMatchResult()
@@ -583,7 +584,7 @@ class FaceLivenessViewModel(
                     isPostingMatchResult = false,
                     matchResultMessage = MatchResultMessage(
                         status = MatchResultStatus.FAILED,
-                        title = "Office In not recorded",
+                        title = "Presence not recorded",
                         message = "Missing faceId — cannot send the match result."
                     )
                 )
@@ -639,7 +640,7 @@ class FaceLivenessViewModel(
         } catch (e: Exception) {
             MatchResultMessage(
                 status = MatchResultStatus.FAILED,
-                title = "Office In not recorded",
+                title = "Presence not recorded",
                 message = describeMatchResultError(e)
             )
         }
@@ -657,7 +658,7 @@ class FaceLivenessViewModel(
             status = if (recorded) MatchResultStatus.RECORDED else MatchResultStatus.NOT_RECORDED,
             title = if (recorded) "Attendance recorded" else "Attendance not recorded",
             message = message?.takeIf { it.isNotBlank() }
-                ?: if (recorded) "Office In recorded" else "Face did not match. Office In was not recorded.",
+                ?: if (recorded) "Presence recorded" else "Face did not match. Presence was not recorded.",
             details = listOfNotNull(
                 recordId?.let { "Record ID: $it" },
                 recordedAt?.let { "Recorded at: $it" }
@@ -699,7 +700,6 @@ class FaceLivenessViewModel(
     fun restartVerificationFlow() {
         _uiState.update {
             it.copy(
-                selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 verifiedCapturedBitmap = null,
                 identityMatch = IdentityMatchResult(),
@@ -722,8 +722,8 @@ class FaceLivenessViewModel(
     }
 
     private fun initChallenges() {
-        // MiniFASNet PAD first (mesh on), then the MediaPipe challenges from the match config.
-        val challenges = _uiState.value.matchConfig.requiredChallenges.map { ChallengeStep(it) }
+        // Fixed in-app: MiniFASNet PAD, then center face + blink (API no longer sends challenges).
+        val challenges = DEFAULT_CHALLENGES.map { ChallengeStep(it) }
         _uiState.update {
             it.copy(
                 challenges = challenges,
@@ -957,7 +957,7 @@ class FaceLivenessViewModel(
                         challenges = updatedList,
                         isLivenessVerified = true,
                         isChallengeActive = false,
-                        challengeStatusText = "Office In liveness confirmed"
+                        challengeStatusText = "Mark Presence liveness confirmed"
                     )
                 }
                 logVerificationEvent(wasMediaPipeMesh = true)
@@ -999,7 +999,7 @@ class FaceLivenessViewModel(
             id = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
             formattedTime = formattedTime,
-            profileMatched = _uiState.value.identityMatch.profile?.name ?: "Office In",
+            profileMatched = _uiState.value.identityMatch.profile?.name ?: "Present",
             matchScore = _uiState.value.identityMatch.matchPercentage,
             livenessPassed = state.isLivenessVerified,
             spoofRisk = state.spoofResult.riskLevel,
@@ -1256,6 +1256,12 @@ class FaceLivenessViewModel(
         const val CAPTURE_MAX_SIDE = 480
         const val CAPTURE_JPEG_QUALITY = 85
 
+        const val PREFS_NAME = "face_liveness_settings"
+        const val KEY_THRESHOLD = "match_threshold"
+        const val KEY_MAX_SPOOF = "max_spoof_probability"
+        const val MATCH_SLIDER_MIN = 0.05f
+        const val MATCH_SLIDER_MAX = 0.95f
+
         // Blink: blendshape close ≥ 0.38, EAR ≤ 0.17; reopen blend ≤ 0.28 or EAR ≥ 0.21.
         const val BLINK_CLOSED_BLEND = 0.38f
         const val BLINK_OPEN_BLEND = 0.28f
@@ -1263,5 +1269,7 @@ class FaceLivenessViewModel(
         const val BLINK_OPEN_EAR = 0.21f
         const val BLINK_MIN_CLOSED_FRAMES = 2
         const val BLINK_MIN_OPEN_FRAMES = 2
+
+        val DEFAULT_CHALLENGES = listOf(ChallengeType.CENTER_FACE, ChallengeType.BLINK_EYES)
     }
 }

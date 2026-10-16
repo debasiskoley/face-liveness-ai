@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.AppPrimary
 import kotlinx.coroutines.delay
 
 private const val SPLASH_DURATION_MS = 1500L
@@ -87,7 +88,7 @@ fun AppLogo(size: Int) {
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = null,
-                tint = AppText,
+                tint = AppPrimary,
                 modifier = Modifier.size((size * 0.55f).dp)
             )
         }

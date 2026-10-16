@@ -130,7 +130,7 @@ fun VerificationSuccessScreen(
                 title = {
                     Column {
                         Text(
-                            text = if (matched) "Office In Successful" else "Office In · No Match",
+                            text = if (matched) "Recorded Successful" else "Presence Record · No Match",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = AppText
@@ -376,7 +376,7 @@ fun VerificationSuccessScreen(
                         if (displayBitmap != null) {
                             Image(
                                 bitmap = displayBitmap.asImageBitmap(),
-                                contentDescription = "Office In capture",
+                                contentDescription = "Presence capture",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
@@ -409,7 +409,7 @@ fun VerificationSuccessScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Office In Again",
+                    text = "Record Presence Again",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = AppText

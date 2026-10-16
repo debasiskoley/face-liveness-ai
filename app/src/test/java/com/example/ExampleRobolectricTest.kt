@@ -82,9 +82,6 @@ class ExampleRobolectricTest {
     assertTrue(screens.contains(com.example.viewmodel.AppScreen.MAIN_DASHBOARD))
     assertTrue(screens.contains(com.example.viewmodel.AppScreen.VERIFICATION_SUCCESS))
 
-    val tabs = com.example.viewmodel.AppTab.values()
-    assertTrue(tabs.contains(com.example.viewmodel.AppTab.HOME))
-    assertTrue(tabs.contains(com.example.viewmodel.AppTab.SETTINGS))
   }
 
   @Test

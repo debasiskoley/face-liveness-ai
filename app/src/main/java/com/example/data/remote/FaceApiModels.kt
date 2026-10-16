@@ -28,8 +28,7 @@ data class EnrollFaceResponse(
 @JsonClass(generateAdapter = true)
 data class EmployeeFaceResponse(
     val employee: EmployeeDto? = null,
-    val face: FacePayload? = null,
-    val matchConfig: MatchConfigDto? = null
+    val face: FacePayload? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -37,13 +36,6 @@ data class EmployeeDto(
     val employeeId: String? = null,
     val name: String? = null,
     val mobileNumber: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class MatchConfigDto(
-    val threshold: Float? = null,
-    val requiredChallenges: List<String>? = null,
-    val maxSpoofProbability: Float? = null
 )
 
 @JsonClass(generateAdapter = true)

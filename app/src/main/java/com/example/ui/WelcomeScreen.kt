@@ -23,10 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AppRegistration
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,6 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AppPrimary
+import com.example.ui.theme.AppSecondary
 
 enum class MobileAction(val title: String, val confirmLabel: String) {
     LOGIN_WITH_FACE("Login with Face", "Continue"),
@@ -80,7 +83,7 @@ fun WelcomeScreen(
     onLoginWithFace: () -> Unit,
     onStartRecognize: () -> Unit = {},
     onEnrollFace: () -> Unit,
-    onRegisterDevice: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     registeredGateName: String? = null,
     isCheckingDevice: Boolean = false,
     isStartingRecognize: Boolean = false
@@ -95,30 +98,39 @@ fun WelcomeScreen(
                 title = {
                     if (registeredGateName != null) {
                         Text(
-                            text = registeredGateName,
+                            text = "Device at $registeredGateName",
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppText
+                        )
+                    } else {
+                        Text(
+                            text = "Device not enrolled",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
                             color = AppText
                         )
                     }
                 },
                 actions = {
                     FilledIconButton(
-                        onClick = onRegisterDevice,
+                        onClick = onOpenSettings,
                         modifier = Modifier
                             .padding(end = 12.dp)
                             .size(52.dp)
-                            .border(1.dp, AppBorder, CircleShape)
-                            .testTag("register_device_button"),
+                            .border(1.dp, AppPrimary, CircleShape)
+                            .testTag("settings_button"),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = AppButton,
+                            containerColor = AppButton.copy(alpha = 0.12f),
                             contentColor = AppText
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AppRegistration,
-                            contentDescription = "Register device",
-                            modifier = Modifier.size(26.dp)
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(26.dp),
+                            tint = AppSecondary
                         )
                     }
                 },
@@ -167,7 +179,7 @@ private fun WelcomeContent(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Mark your attendance with a live face check",
+                text = "Mark your Presence with a live face check",
                 fontSize = 14.sp,
                 color = AppText,
                 textAlign = TextAlign.Center
@@ -209,7 +221,7 @@ private fun WelcomeContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
-                    .testTag("login_with_face_button"),
+                    .testTag("login_using_mobile_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppButton,
@@ -223,10 +235,10 @@ private fun WelcomeContent(
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
-                    Icon(imageVector = Icons.Default.Face, contentDescription = null)
+                    Icon(imageVector = Icons.Default.Face, contentDescription = null, tint = AppPrimary)
                 }
                 Spacer(modifier = Modifier.size(10.dp))
-                Text(text = "Login with Face", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Login using Mobile", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppPrimary)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
