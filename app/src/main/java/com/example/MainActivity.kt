@@ -124,6 +124,7 @@ fun FaceLivenessRoot(
     var mobileAction by rememberSaveable { mutableStateOf<MobileAction?>(null) }
     var showRegisterDevice by rememberSaveable { mutableStateOf(false) }
     var checkingDevice by remember { mutableStateOf(false) }
+    var startingRecognize by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var enrollMobile by rememberSaveable { mutableStateOf("") }
 
@@ -132,9 +133,13 @@ fun FaceLivenessRoot(
             when (event) {
                 LoginEvent.Success -> {
                     mobileAction = null
+                    startingRecognize = false
                     route = AppRoute.DASHBOARD
                 }
-                is LoginEvent.Error -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                is LoginEvent.Error -> {
+                    startingRecognize = false
+                    Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -146,7 +151,7 @@ fun FaceLivenessRoot(
             LaunchedEffect(Unit) { deviceViewModel.refreshRegistration() }
             WelcomeScreen(
                 onLoginWithFace = {
-                    if (!checkingDevice) {
+                    if (!checkingDevice && !uiState.isLoggingIn) {
                         checkingDevice = true
                         scope.launch {
                             val registered = deviceViewModel.refreshRegistration()
@@ -159,7 +164,25 @@ fun FaceLivenessRoot(
                         }
                     }
                 },
+                onStartRecognize = {
+                    if (!checkingDevice && !uiState.isLoggingIn && !startingRecognize) {
+                        startingRecognize = true
+                        scope.launch {
+                            val registered = deviceViewModel.refreshRegistration()
+                            if (registered) {
+                                viewModel.startRecognize(
+                                    deviceId = deviceState.deviceId,
+                                    gateId = deviceState.registeredGate?.gateId
+                                )
+                            } else {
+                                startingRecognize = false
+                                Toast.makeText(context, "Register device before login", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                },
                 isCheckingDevice = checkingDevice,
+                isStartingRecognize = startingRecognize,
                 onEnrollFace = { mobileAction = MobileAction.ENROLL_FACE },
                 onRegisterDevice = {
                     deviceViewModel.open()
@@ -275,6 +298,7 @@ fun FaceLivenessApp(
                 onNavigateBack = { viewModel.navigateToScreen(AppScreen.MAIN_DASHBOARD) },
                 onRestartVerification = { viewModel.restartVerificationFlow() },
                 onLogout = onLogout,
+                isRecognizeMode = uiState.isRecognizeMode,
                 isPostingMatchResult = uiState.isPostingMatchResult,
                 matchResultMessage = uiState.matchResultMessage,
                 onDismissMatchResult = viewModel::dismissMatchResultMessage,

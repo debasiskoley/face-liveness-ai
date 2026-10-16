@@ -176,7 +176,8 @@ data class EnrolledProfile(
     val photoUri: String? = null,
     val address: String = "",
     val mobileNo: String = "",
-    val email: String = ""
+    val email: String = "",
+    val employeeId: String = ""
 )
 
 /**

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AppRegistration
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.AppPrimary
 
 enum class MobileAction(val title: String, val confirmLabel: String) {
     LOGIN_WITH_FACE("Login with Face", "Continue"),
@@ -76,10 +78,12 @@ fun isValidMobileNumber(value: String): Boolean = MOBILE_NUMBER_REGEX.matches(va
 @Composable
 fun WelcomeScreen(
     onLoginWithFace: () -> Unit,
+    onStartRecognize: () -> Unit = {},
     onEnrollFace: () -> Unit,
     onRegisterDevice: () -> Unit = {},
     registeredGateName: String? = null,
-    isCheckingDevice: Boolean = false
+    isCheckingDevice: Boolean = false,
+    isStartingRecognize: Boolean = false
 ) {
     Scaffold(
         modifier = Modifier
@@ -125,8 +129,10 @@ fun WelcomeScreen(
         WelcomeContent(
             modifier = Modifier.padding(innerPadding),
             onLoginWithFace = onLoginWithFace,
+            onStartRecognize = onStartRecognize,
             onEnrollFace = onEnrollFace,
-            isCheckingDevice = isCheckingDevice
+            isCheckingDevice = isCheckingDevice,
+            isStartingRecognize = isStartingRecognize
         )
     }
 }
@@ -135,8 +141,10 @@ fun WelcomeScreen(
 private fun WelcomeContent(
     modifier: Modifier,
     onLoginWithFace: () -> Unit,
+    onStartRecognize: () -> Unit,
     onEnrollFace: () -> Unit,
-    isCheckingDevice: Boolean
+    isCheckingDevice: Boolean,
+    isStartingRecognize: Boolean
 ) {
     Box(
         modifier = modifier
@@ -164,13 +172,43 @@ private fun WelcomeContent(
                 color = AppText,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Button(
+                onClick = onStartRecognize,
+                enabled = !isCheckingDevice && !isStartingRecognize,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .testTag("start_recognize_button"),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppButton,
+                    contentColor = AppText
+                )
+            ) {
+                if (isStartingRecognize) {
+                    CircularProgressIndicator(
+                        color = AppText,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Icon(imageVector = Icons.Default.Groups, contentDescription = null, tint = AppPrimary)
+                }
+                Spacer(modifier = Modifier.size(10.dp))
+                Text(text = "Start Recognize", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppPrimary)
+            }
+
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
                 onClick = onLoginWithFace,
+                enabled = !isCheckingDevice && !isStartingRecognize,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(80.dp)
                     .testTag("login_with_face_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -178,7 +216,7 @@ private fun WelcomeContent(
                     contentColor = AppText
                 )
             ) {
-                if (isCheckingDevice) {
+                if (isCheckingDevice && !isStartingRecognize) {
                     CircularProgressIndicator(
                         color = AppText,
                         strokeWidth = 2.dp,
@@ -195,9 +233,10 @@ private fun WelcomeContent(
 
             OutlinedButton(
                 onClick = onEnrollFace,
+                enabled = !isCheckingDevice && !isStartingRecognize,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(80.dp)
                     .testTag("enroll_face_button"),
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.dp, AppBorder),

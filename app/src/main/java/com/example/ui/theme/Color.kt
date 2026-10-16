@@ -2,6 +2,9 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+val AppPrimary = Color(0xFFFFFFFF)
+val AppSecondary = Color(0xFF000000)
+
 val AppButton = Color(0xFF49CC90)
 val AppBackground = Color(0xFFFBFDFE)
 val AppSurface = Color(0xFFFFFFFF)

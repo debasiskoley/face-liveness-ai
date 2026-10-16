@@ -202,7 +202,7 @@ private fun OfficeInIdleFragment(
                     onClick = onOfficeInClick,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .height(80.dp)
                         .testTag("office_in_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = AppButton),
                     shape = RoundedCornerShape(16.dp)

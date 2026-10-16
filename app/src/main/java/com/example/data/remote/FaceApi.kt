@@ -16,6 +16,11 @@ interface FaceApi {
     @GET("api/employees/face")
     suspend fun getEmployeeFace(@Query("mobileNumber") mobileNumber: String): EmployeeFaceResponse
 
+    /** All enrolled faces + employees. Same path as [getEmployeeFace] with no mobileNumber. */
+    @Headers("Accept: application/json")
+    @GET("api/employees/face")
+    suspend fun getAllEmployeeFaces(): List<EmployeeFaceResponse>
+
     @Headers("Accept: application/json")
     @POST("api/faces/match-result")
     suspend fun postMatchResult(@Body request: MatchResultRequest): MatchResultResponse

@@ -104,6 +104,8 @@ data class FaceLivenessUiState(
     val faceId: String = "",
     val deviceId: String = "",
     val gateId: Int? = null,
+    /** True after "Start Recognize": match 1:N against the full enrolled list. */
+    val isRecognizeMode: Boolean = false,
 
     val isPostingMatchResult: Boolean = false,
     val matchResultMessage: MatchResultMessage? = null
@@ -249,6 +251,27 @@ class FaceLivenessViewModel(
         }
     }
 
+    /**
+     * Loads every enrolled face from GET /api/employees/face (no mobileNumber), then opens the
+     * dashboard. Office In matches 1:N against that list.
+     */
+    fun startRecognize(deviceId: String, gateId: Int?) {
+        if (_uiState.value.isLoggingIn) return
+        _uiState.update { it.copy(isLoggingIn = true) }
+        loginJob = viewModelScope.launch {
+            val event = try {
+                startRecognizeSession(deviceId, gateId)
+                LoginEvent.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LoginEvent.Error(describeLoginError(e))
+            }
+            _uiState.update { it.copy(isLoggingIn = false) }
+            _loginEvents.send(event)
+        }
+    }
+
     private suspend fun startSession(
         mobileNumber: String,
         response: EmployeeFaceResponse,
@@ -272,8 +295,9 @@ class FaceLivenessViewModel(
             name = name,
             enrolledDate = "",
             vector = BiometricVector(embedding.toFloatArray()),
-            photoUri = face?.imageBase64?.let { saveEnrolledFacePhoto(it) },
-            mobileNo = employee?.mobileNumber ?: mobileNumber
+            photoUri = face?.imageBase64?.let { saveEnrolledFacePhoto(it, face.faceId ?: mobileNumber) },
+            mobileNo = employee?.mobileNumber ?: mobileNumber,
+            employeeId = employee?.employeeId.orEmpty()
         )
 
         _uiState.update {
@@ -286,6 +310,68 @@ class FaceLivenessViewModel(
                 faceId = face?.faceId.orEmpty(),
                 deviceId = deviceId,
                 gateId = gateId,
+                isRecognizeMode = false,
+                selectedTab = AppTab.HOME,
+                currentScreen = AppScreen.MAIN_DASHBOARD,
+                identityMatch = IdentityMatchResult(),
+                matchResultMessage = null
+            )
+        }
+    }
+
+    private suspend fun startRecognizeSession(deviceId: String, gateId: Int?) {
+        val responses = ApiClient.faceApi.getAllEmployeeFaces()
+        if (responses.isEmpty()) {
+            throw IllegalStateException("No enrolled faces found on the server.")
+        }
+
+        clearEnrolledFacePhotos()
+        val defaults = MatchConfig()
+        var config = defaults
+        val profiles = ArrayList<EnrolledProfile>()
+        for (response in responses) {
+            val face = response.face ?: continue
+            val embedding = face.embedding.orEmpty()
+            val entryConfig = response.matchConfig.toMatchConfig()
+            if (embedding.size != entryConfig.embeddingDim) continue
+            if (profiles.isEmpty()) config = entryConfig
+
+            val employee = response.employee
+            val faceId = face.faceId?.takeIf { it.isNotBlank() }
+                ?: employee?.employeeId?.takeIf { it.isNotBlank() }
+                ?: continue
+            val name = employee?.name?.takeIf { it.isNotBlank() }
+                ?: employee?.mobileNumber?.let { "+91 $it" }
+                ?: faceId
+            profiles.add(
+                EnrolledProfile(
+                    id = faceId,
+                    name = name,
+                    enrolledDate = "",
+                    vector = BiometricVector(embedding.toFloatArray()),
+                    photoUri = face.imageBase64?.let { saveEnrolledFacePhoto(it, faceId) },
+                    mobileNo = employee?.mobileNumber.orEmpty(),
+                    employeeId = employee?.employeeId.orEmpty()
+                )
+            )
+        }
+        if (profiles.isEmpty()) {
+            throw IllegalStateException(
+                "No usable ${defaults.embeddingDim}-D face templates found. Re-enroll faces on the server."
+            )
+        }
+
+        _uiState.update {
+            it.copy(
+                mobileNumber = "",
+                employeeId = "",
+                employeeName = "Recognize · ${profiles.size} faces",
+                enrolledProfiles = profiles,
+                matchConfig = config,
+                faceId = "",
+                deviceId = deviceId,
+                gateId = gateId,
+                isRecognizeMode = true,
                 selectedTab = AppTab.HOME,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 identityMatch = IdentityMatchResult(),
@@ -309,20 +395,29 @@ class FaceLivenessViewModel(
     }
 
     /** Writes the server face crop to cache so the result screen can show it; returns a file URI. */
-    private suspend fun saveEnrolledFacePhoto(imageBase64: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val bytes = Base64.decode(imageBase64.substringAfter("base64,"), Base64.DEFAULT)
-            if (bytes.isEmpty()) return@withContext null
-            val dir = getApplication<Application>().cacheDir
-            dir.listFiles { file -> file.name.startsWith(ENROLLED_FACE_PREFIX) }?.forEach { it.delete() }
-            val file = File(dir, "$ENROLLED_FACE_PREFIX${System.currentTimeMillis()}.jpg")
-            file.writeBytes(bytes)
-            Uri.fromFile(file).toString()
-        } catch (_: IllegalArgumentException) {
-            null
-        } catch (_: IOException) {
-            null
+    private suspend fun saveEnrolledFacePhoto(imageBase64: String, key: String): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val bytes = Base64.decode(imageBase64.substringAfter("base64,"), Base64.DEFAULT)
+                if (bytes.isEmpty()) return@withContext null
+                val safeKey = key.replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+                val file = File(
+                    getApplication<Application>().cacheDir,
+                    "$ENROLLED_FACE_PREFIX${safeKey}_${System.currentTimeMillis()}.jpg"
+                )
+                file.writeBytes(bytes)
+                Uri.fromFile(file).toString()
+            } catch (_: IllegalArgumentException) {
+                null
+            } catch (_: IOException) {
+                null
+            }
         }
+
+    private fun clearEnrolledFacePhotos() {
+        getApplication<Application>().cacheDir
+            .listFiles { file -> file.name.startsWith(ENROLLED_FACE_PREFIX) }
+            ?.forEach { it.delete() }
     }
 
     private fun describeLoginError(e: Exception): String = when (e) {
@@ -338,6 +433,7 @@ class FaceLivenessViewModel(
         matchResultJob?.cancel()
         pendingMatchResult = null
         cancelOfficeIn()
+        clearEnrolledFacePhotos()
         _uiState.update {
             it.copy(
                 mobileNumber = "",
@@ -349,6 +445,7 @@ class FaceLivenessViewModel(
                 faceId = "",
                 deviceId = "",
                 gateId = null,
+                isRecognizeMode = false,
                 isPostingMatchResult = false,
                 matchResultMessage = null,
                 selectedTab = AppTab.HOME,
@@ -361,22 +458,34 @@ class FaceLivenessViewModel(
 
     fun completeOfficeIn() {
         viewModelScope.launch {
-            val liveBmp = _uiState.value.lastCapturedBitmap
-            val liveBox = _uiState.value.metrics.boundingBox
-            val profiles = _uiState.value.enrolledProfiles
-            val config = _uiState.value.matchConfig
+            val stateBefore = _uiState.value
+            val liveBmp = stateBefore.lastCapturedBitmap
+            val liveBox = stateBefore.metrics.boundingBox
+            val profiles = stateBefore.enrolledProfiles
+            val config = stateBefore.matchConfig
+            val recognizeMode = stateBefore.isRecognizeMode
             _uiState.update {
                 it.copy(
                     isMatchingIdentity = true,
-                    challengeStatusText = "Matching your enrolled face…"
+                    challengeStatusText = if (recognizeMode) {
+                        "Matching against enrolled faces…"
+                    } else {
+                        "Matching your enrolled face…"
+                    }
                 )
             }
-            val match = identityEmbedder.match(
+            var match = identityEmbedder.match(
                 liveBmp,
                 liveBox,
                 profiles,
                 threshold = config.threshold
             )
+            if (!match.isMatch && recognizeMode) {
+                match = match.copy(
+                    profile = null,
+                    statusLabel = "Not enrolled yet"
+                )
+            }
             val spoof = _uiState.value.spoofResult
             if (!_uiState.value.isLivenessVerified) {
                 _uiState.update { it.copy(isMatchingIdentity = false) }
@@ -397,6 +506,7 @@ class FaceLivenessViewModel(
                 return@launch
             }
             val capturedAt = System.currentTimeMillis()
+            val matchedProfile = match.profile
             _uiState.update {
                 it.copy(
                     currentScreen = AppScreen.VERIFICATION_SUCCESS,
@@ -405,23 +515,84 @@ class FaceLivenessViewModel(
                     isMatchingIdentity = false,
                     verifiedCapturedBitmap = liveBmp ?: it.lastCapturedBitmap,
                     officeInTimestamp = capturedAt,
-                    identityMatch = match
+                    identityMatch = match,
+                    // Fill employee fields from the 1:N hit so Settings / POST use the right person.
+                    faceId = if (match.isMatch) {
+                        matchedProfile?.id.orEmpty()
+                    } else if (recognizeMode) {
+                        ""
+                    } else {
+                        it.faceId
+                    },
+                    employeeId = if (match.isMatch) {
+                        matchedProfile?.employeeId?.ifBlank { matchedProfile.id }.orEmpty()
+                    } else if (recognizeMode) {
+                        ""
+                    } else {
+                        it.employeeId
+                    },
+                    employeeName = if (match.isMatch) {
+                        matchedProfile?.name.orEmpty()
+                    } else if (recognizeMode) {
+                        it.employeeName
+                    } else {
+                        it.employeeName
+                    },
+                    mobileNumber = if (match.isMatch) {
+                        matchedProfile?.mobileNo.orEmpty()
+                    } else if (recognizeMode) {
+                        ""
+                    } else {
+                        it.mobileNumber
+                    },
+                    // Not enrolled: show dialog on the result page (no server POST).
+                    matchResultMessage = if (!match.isMatch && recognizeMode) {
+                        MatchResultMessage(
+                            status = MatchResultStatus.NOT_RECORDED,
+                            title = "Not enrolled yet",
+                            message = "This face is not in the enrolled employee list."
+                        )
+                    } else {
+                        null
+                    }
                 )
             }
             logVerificationEvent(wasMediaPipeMesh = true)
-            submitMatchResult(match, _uiState.value.verifiedCapturedBitmap, capturedAt)
+            // Recognize mode only posts when a face from the list matched.
+            if (match.isMatch || !recognizeMode) {
+                submitMatchResult(match, _uiState.value.verifiedCapturedBitmap, capturedAt)
+            }
         }
     }
 
     private fun submitMatchResult(match: IdentityMatchResult, capture: Bitmap?, capturedAt: Long) {
         val state = _uiState.value
+        val faceId = when {
+            match.isMatch -> match.profile?.id?.takeIf { it.isNotBlank() }
+                ?: state.faceId.takeIf { it.isNotBlank() }
+            else -> state.faceId.takeIf { it.isNotBlank() }
+                ?: state.enrolledProfiles.firstOrNull()?.id
+        }.orEmpty()
+        if (faceId.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    isPostingMatchResult = false,
+                    matchResultMessage = MatchResultMessage(
+                        status = MatchResultStatus.FAILED,
+                        title = "Office In not recorded",
+                        message = "Missing faceId — cannot send the match result."
+                    )
+                )
+            }
+            return
+        }
         matchResultJob?.cancel()
         _uiState.update { it.copy(isPostingMatchResult = true, matchResultMessage = null) }
         matchResultJob = viewModelScope.launch {
             val request = MatchResultRequest(
                 event = EVENT_IN,
                 result = if (match.isMatch) RESULT_SUCCESS else RESULT_FAILURE,
-                faceId = state.faceId.ifBlank { state.enrolledProfiles.firstOrNull()?.id.orEmpty() },
+                faceId = faceId,
                 cosineSimilarity = match.cosineSimilarity,
                 threshold = state.matchConfig.threshold,
                 liveness = LivenessPayload(

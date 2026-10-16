@@ -166,7 +166,7 @@ fun EnrollFaceScreen(
                 enabled = hasCameraPermission && uiState.canCapture,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(80.dp)
                     .testTag("capture_enroll_button"),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(

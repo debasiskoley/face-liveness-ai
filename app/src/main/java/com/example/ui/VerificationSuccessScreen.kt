@@ -57,8 +57,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -87,13 +92,29 @@ fun VerificationSuccessScreen(
     onNavigateBack: () -> Unit,
     onRestartVerification: () -> Unit,
     onLogout: () -> Unit = {},
+    isRecognizeMode: Boolean = false,
     isPostingMatchResult: Boolean = false,
     matchResultMessage: MatchResultMessage? = null,
     onDismissMatchResult: () -> Unit = {},
     onRetryMatchResult: () -> Unit = {}
 ) {
+    var redirectAfterOk by remember { mutableStateOf(false) }
+    LaunchedEffect(redirectAfterOk) {
+        if (redirectAfterOk) {
+            delay(5_000)
+            onNavigateBack()
+        }
+    }
+
     matchResultMessage?.let {
-        MatchResultDialog(message = it, onDismiss = onDismissMatchResult, onRetry = onRetryMatchResult)
+        MatchResultDialog(
+            message = it,
+            onDismiss = {
+                onDismissMatchResult()
+                if (isRecognizeMode) redirectAfterOk = true
+            },
+            onRetry = onRetryMatchResult
+        )
     }
 
     val formattedTime = SimpleDateFormat("MMM dd, yyyy · hh:mm:ss a", Locale.getDefault())
@@ -117,6 +138,8 @@ fun VerificationSuccessScreen(
                         Text(
                             text = if (matched) {
                                 "Liveness passed · Identity matched"
+                            } else if (identityMatch.statusLabel.equals("Not enrolled yet", ignoreCase = true)) {
+                                "Liveness passed · Not enrolled yet"
                             } else {
                                 "Liveness passed · Face not enrolled"
                             },
@@ -182,7 +205,12 @@ fun VerificationSuccessScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = if (matched) "FACE MATCHED" else "FACE NOT MATCHED",
+                        text = when {
+                            matched -> "FACE MATCHED"
+                            identityMatch.statusLabel.equals("Not enrolled yet", ignoreCase = true) ->
+                                "NOT ENROLLED YET"
+                            else -> "FACE NOT MATCHED"
+                        },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
@@ -194,6 +222,8 @@ fun VerificationSuccessScreen(
                     Text(
                         text = if (matched) {
                             "${identityMatch.statusLabel} after the liveness check."
+                        } else if (identityMatch.statusLabel.equals("Not enrolled yet", ignoreCase = true)) {
+                            "This face is not in the enrolled employee list."
                         } else {
                             "Liveness passed. ${identityMatch.statusLabel}."
                         },
@@ -366,7 +396,7 @@ fun VerificationSuccessScreen(
                 onClick = onRestartVerification,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(80.dp)
                     .testTag("restart_verification_button"),
                 colors = ButtonDefaults.buttonColors(containerColor = AppButton),
                 shape = RoundedCornerShape(12.dp)
@@ -390,7 +420,7 @@ fun VerificationSuccessScreen(
                 onClick = onNavigateBack,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(80.dp)
                     .testTag("return_to_dashboard_button"),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
                 border = androidx.compose.foundation.BorderStroke(1.dp, AppBorder),
@@ -410,23 +440,25 @@ fun VerificationSuccessScreen(
                 )
             }
 
-            OutlinedButton(
-                onClick = onLogout,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("result_logout_button"),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Logout", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            if (!isRecognizeMode) {
+                OutlinedButton(
+                    onClick = onLogout,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .testTag("result_logout_button"),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Logout", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

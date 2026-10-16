@@ -103,7 +103,7 @@ fun SettingsScreen(
             onClick = onLogout,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(80.dp)
                 .testTag("logout_button"),
             shape = RoundedCornerShape(14.dp),
             border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),

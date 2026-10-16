@@ -132,6 +132,28 @@ class EnrollFaceRequestJsonTest {
   }
 
   @Test
+  fun `all employee faces list parses without mobileNumber`() {
+    val json = """
+      [{"employee":{"employeeId":"1001","name":"Asha","mobileNumber":"9999999999"},
+        "face":{"faceId":"f_1","embedding":[0.1,0.2],"embeddingDim":2,"normalized":true},
+        "matchConfig":{"threshold":0.4,"requiredChallenges":["CENTER_FACE"],"maxSpoofProbability":0.35}},
+       {"employee":{"employeeId":"1002","name":"Ravi","mobileNumber":"9888888888"},
+        "face":{"faceId":"f_2","embedding":[0.3],"embeddingDim":1,"normalized":true},
+        "matchConfig":{"threshold":0.4,"requiredChallenges":["BLINK_EYES"],"maxSpoofProbability":0.3}}]
+    """.trimIndent()
+    val type = com.squareup.moshi.Types.newParameterizedType(
+        List::class.java,
+        EmployeeFaceResponse::class.java
+    )
+    val list = moshi.adapter<List<EmployeeFaceResponse>>(type).fromJson(json)!!
+
+    assertEquals(2, list.size)
+    assertEquals("Asha", list[0].employee?.name)
+    assertEquals("f_2", list[1].face?.faceId)
+    assertEquals(listOf(0.3f), list[1].face?.embedding)
+  }
+
+  @Test
   fun `match result response parses the 201 body`() {
     val response = moshi.adapter(MatchResultResponse::class.java).fromJson(
         """{"recordId":"rec_20261015_5010","employeeId":"1001","gateId":2,"event":"IN","result":"SUCCESS",""" +
