@@ -244,6 +244,7 @@ fun FaceLivenessRoot(
             } else {
                 FaceLivenessApp(
                     viewModel = viewModel,
+                    deviceViewModel = deviceViewModel,
                     onLogout = {
                         viewModel.logout()
                         route = AppRoute.WELCOME
@@ -258,10 +259,12 @@ fun FaceLivenessRoot(
 @Composable
 fun FaceLivenessApp(
     viewModel: FaceLivenessViewModel,
+    deviceViewModel: DeviceRegistrationViewModel,
     onLogout: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val uiDevice by deviceViewModel.uiState.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -429,10 +432,12 @@ fun FaceLivenessApp(
                                 metrics = uiState.metrics,
                                 spoofResult = uiState.spoofResult,
                                 isLivenessVerified = uiState.isLivenessVerified,
+                                isMatchingIdentity = uiState.isMatchingIdentity,
                                 challenges = uiState.challenges,
                                 currentChallengeIndex = uiState.currentChallengeIndex,
                                 challengeStatusText = uiState.challengeStatusText,
                                 lastOfficeInTimestamp = uiState.officeInTimestamp,
+                                registeredGateName = uiDevice.registeredGate?.gateName,
                                 onOfficeInClick = { viewModel.startOfficeIn() },
                                 onCancelOfficeIn = { viewModel.cancelOfficeIn() },
                                 onRestartChallenges = { viewModel.resetChallenges() },
@@ -442,7 +447,9 @@ fun FaceLivenessApp(
                                 },
                                 onFaceDetected = { face, w, h, bmp ->
                                     viewModel.onFaceDetected(face, w, h, bmp)
-                                }
+                                },
+                                onLogout = onLogout,
+                                showLogout = uiState.isRecognizeMode
                             )
                         }
 
@@ -453,7 +460,8 @@ fun FaceLivenessApp(
                                 mobileNumber = uiState.mobileNumber,
                                 matchConfig = uiState.matchConfig,
                                 serverUrl = ApiClient.baseUrl,
-                                onLogout = onLogout
+                                onLogout = onLogout,
+                                showLogout = !uiState.isRecognizeMode
                             )
                         }
                     }

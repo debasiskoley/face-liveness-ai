@@ -47,7 +47,9 @@ fun SettingsScreen(
     mobileNumber: String,
     matchConfig: MatchConfig,
     serverUrl: String,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    /** Logout only for Login with Face (mobile). Hidden for Start Recognize (list match). */
+    showLogout: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -97,21 +99,23 @@ fun SettingsScreen(
             SettingsRow(label = "API base URL", value = serverUrl)
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        if (showLogout) {
+            Spacer(modifier = Modifier.height(4.dp))
 
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .testTag("logout_button"),
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
-        ) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Logout", fontWeight = FontWeight.SemiBold)
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .testTag("logout_button"),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, AppError.copy(alpha = 0.6f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppError)
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Logout", fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

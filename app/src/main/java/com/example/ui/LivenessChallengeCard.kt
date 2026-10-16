@@ -325,7 +325,7 @@ fun LivenessChallengeCard(
                     color = AppSuccess
                 ) {
                     Text(
-                        text = "Recording Office In…",
+                        text = "Liveness passed · Matching face…",
                         modifier = Modifier.padding(vertical = 14.dp),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
