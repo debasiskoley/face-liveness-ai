@@ -69,7 +69,8 @@ class MediaPipeFaceLandmarkerHelper(
                 .setMinFacePresenceConfidence(0.5f)
                 .setMinTrackingConfidence(0.5f)
                 .setOutputFaceBlendshapes(true)
-                .setOutputFacialTransformationMatrixes(true)
+                // Matrices unused — skip the extra work each frame.
+                .setOutputFacialTransformationMatrixes(false)
                 .setRunningMode(RunningMode.IMAGE)
                 .setNumFaces(1)
                 .build()
@@ -141,46 +142,42 @@ class MediaPipeFaceLandmarkerHelper(
             val chin = landmarks[152]
             val forehead = landmarks[10]
 
-            // Calculate Bounding Box from 468 landmarks
+            // Bounding box only — skip building a 468-point mesh list once PAD has cleared.
+            val padAlreadyCleared = lastSilentPad?.available == true && lastSilentPad?.isReal == true
             var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
-            var minZ = 100f; var maxZ = -100f
-            val allPoints2D = ArrayList<PointF>(landmarks.size)
+            val allPoints2D = if (padAlreadyCleared) null else ArrayList<PointF>(landmarks.size)
 
             for (lm in landmarks) {
                 val x = lm.x().coerceIn(0f, 1f)
                 val y = lm.y().coerceIn(0f, 1f)
-                val z = lm.z()
                 if (x < minX) minX = x
                 if (x > maxX) maxX = x
                 if (y < minY) minY = y
                 if (y > maxY) maxY = y
-                if (z < minZ) minZ = z
-                if (z > maxZ) maxZ = z
-                allPoints2D.add(PointF(x, y))
+                allPoints2D?.add(PointF(x, y))
             }
 
             val box = RectF(minX, minY, maxX, maxY)
             val faceArea = (box.width() * box.height()).coerceIn(0f, 1f)
 
             // 3D Depth span between nose tip and temples
-            // Genuine human 3D face has natural depth relief (nose is physically in front of ears/cheeks)
-            // 2D printed photo or flat screen has zero depth variation!
             val zDepthSpan = abs(noseTip.z() - ((leftCheek.z() + rightCheek.z()) / 2f))
 
-            // Compute head rotation angles (Euler angles in degrees) from 3D MediaPipe coordinates
+            // Head rotation from 3D MediaPipe coordinates
             val dx = rightEye.x() - leftEye.x()
             val dy = rightEye.y() - leftEye.y()
-            val dz = rightEye.z() - leftEye.z()
             val rollDeg = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
 
-            // Yaw angle from nose to eye midpoint
             val eyeMidX = (leftEye.x() + rightEye.x()) / 2f
             val eyeDist = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
             val yawDeg = ((noseTip.x() - eyeMidX) / eyeDist) * 90f
 
-            // Pitch angle from eye midpoint to mouth midpoint
             val mouthMidY = (mouthLeft.y() + mouthRight.y()) / 2f
             val pitchDeg = ((noseTip.y() - ((leftEye.y() + mouthMidY) / 2f)) / eyeDist) * 75f
+
+            // Eye aspect ratio (EAR) from lid landmarks — backup when blendshapes lag.
+            val leftEar = eyeAspectRatio(landmarks, 33, 133, 159, 145)
+            val rightEar = eyeAspectRatio(landmarks, 263, 362, 386, 374)
 
             val facialLandmarks = FacialLandmarks(
                 leftEye = PointF(leftEye.x(), leftEye.y()),
@@ -199,19 +196,24 @@ class MediaPipeFaceLandmarkerHelper(
             )
             val distanceFeet = FaceStandoff.estimateFeet(iod, box.width())
 
-            // Once MiniFASNet clears, latch and skip PAD so blink tracking stays responsive.
-            val padAlreadyCleared = lastSilentPad?.available == true && lastSilentPad?.isReal == true
+            // Once MiniFASNet clears, latch forever so blink frames stay cheap.
             val silentPad = if (padAlreadyCleared) {
                 lastSilentPad!!
             } else {
                 padFrameCounter++
-                if (padFrameCounter % 2 == 0 || lastSilentPad == null) {
+                // Run PAD every 3rd frame until live is confirmed.
+                if (padFrameCounter % 3 == 1 || lastSilentPad == null) {
                     silentFacePad.evaluate(bitmap, box).also { lastSilentPad = it }
                 } else {
-                    lastSilentPad!!
+                    lastSilentPad ?: silentFacePad.evaluate(bitmap, box).also { lastSilentPad = it }
                 }
             }
             val padCleared = silentPad.available && silentPad.isReal
+            val meshPoints = if (padCleared) emptyList() else allPoints2D.orEmpty()
+
+            // Prefer blendshapes; fold EAR in so brief blinks still register.
+            blendshapesMap["eyeAspectRatioLeft"] = leftEar
+            blendshapesMap["eyeAspectRatioRight"] = rightEar
 
             val faceMetrics = FaceMetrics(
                 hasFace = true,
@@ -228,7 +230,7 @@ class MediaPipeFaceLandmarkerHelper(
                 landmarks = facialLandmarks,
                 iodNormalized = iod,
                 estimatedDistanceFeet = distanceFeet,
-                meshPoints = if (padCleared) emptyList() else allPoints2D,
+                meshPoints = meshPoints,
                 blendshapes = blendshapesMap
             )
 
@@ -238,14 +240,13 @@ class MediaPipeFaceLandmarkerHelper(
                 silentPad = silentPad
             )
 
-            val biometricVector = computeMediaPipeBiometricVector(landmarks, eyeDist)
-
+            // ArcFace match uses the live bitmap later — skip the unused 32-D mesh vector.
             return MediaPipeAnalysisResult(
                 hasFace = true,
                 metrics = faceMetrics,
                 spoofResult = spoofResult,
-                biometricVector = biometricVector,
-                meshPoints = if (padCleared) emptyList() else allPoints2D,
+                biometricVector = BiometricVector.EMPTY,
+                meshPoints = meshPoints,
                 blendshapes = blendshapesMap
             )
         } catch (e: Exception) {
@@ -255,78 +256,26 @@ class MediaPipeFaceLandmarkerHelper(
     }
 
     /**
-     * Computes invariant 32-dimensional biometric feature embedding
-     * from MediaPipe's 468+ high-density 3D face mesh coordinates.
+     * Vertical eye opening (EAR-like): lid height / eye width.
+     * Closed eyes are typically ≤ ~0.18; open eyes ≥ ~0.22.
      */
-    private fun computeMediaPipeBiometricVector(
+    private fun eyeAspectRatio(
         landmarks: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>,
-        eyeDist: Float
-    ): BiometricVector {
-        val features = FloatArray(32)
-        val iod = eyeDist.coerceAtLeast(0.01f)
-
-        fun d(i1: Int, i2: Int): Float {
-            val p1 = landmarks[i1]
-            val p2 = landmarks[i2]
-            val dx = p1.x() - p2.x()
-            val dy = p1.y() - p2.y()
-            val dz = p1.z() - p2.z()
-            return (sqrt(dx * dx + dy * dy + dz * dz) / iod).coerceIn(0f, 10f)
-        }
-
-        // Structural facial distance ratios across MediaPipe mesh:
-        // 1: Nose tip, 33: Left eye outer, 263: Right eye outer
-        // 61: Mouth left, 291: Mouth right, 17: Mouth bottom, 0: Mouth top
-        // 234: Left cheek, 454: Right cheek, 152: Chin, 10: Forehead
-        features[0] = d(33, 1)    // Left eye outer to nose tip
-        features[1] = d(263, 1)   // Right eye outer to nose tip
-        features[2] = d(1, 61)    // Nose tip to mouth left
-        features[3] = d(1, 291)   // Nose tip to mouth right
-        features[4] = d(61, 291)  // Mouth width
-        features[5] = d(0, 17)    // Mouth height
-        features[6] = d(1, 152)   // Nose to chin
-        features[7] = d(10, 1)    // Forehead to nose tip
-        features[8] = d(234, 454) // Face width (temple to temple)
-        features[9] = d(234, 1)   // Left cheek to nose
-        features[10] = d(454, 1)  // Right cheek to nose
-        features[11] = d(10, 152) // Total facial height
-        features[12] = d(33, 61)  // Left eye to left mouth
-        features[13] = d(263, 291)// Right eye to right mouth
-        features[14] = features[11] / (features[8].coerceAtLeast(0.01f)) // Aspect ratio
-        features[15] = features[4] / (features[8].coerceAtLeast(0.01f))  // Mouth-to-face width ratio
-
-        // 16..23: Philtrum, jawline and orbital ratios
-        // 133: Left eye inner, 362: Right eye inner
-        features[16] = d(133, 362) // Inter-canthal distance
-        features[17] = d(1, 0)     // Philtrum length (nose to upper lip)
-        features[18] = d(17, 152)  // Mental crease to chin
-        features[19] = d(159, 145) // Left eye height
-        features[20] = d(386, 374) // Right eye height
-        features[21] = d(70, 300)  // Eyebrow outer distance
-        features[22] = d(107, 336) // Eyebrow inner distance
-        features[23] = abs(features[0] - features[1]) // Nasal symmetry index
-
-        // 24..31: 3D Z-depth profile ratios (unique to MediaPipe 3D mesh)
-        val noseZ = landmarks[1].z()
-        val leftEarZ = landmarks[234].z()
-        val rightEarZ = landmarks[454].z()
-        val chinZ = landmarks[152].z()
-        features[24] = ((noseZ - leftEarZ) / iod).coerceIn(-5f, 5f)
-        features[25] = ((noseZ - rightEarZ) / iod).coerceIn(-5f, 5f)
-        features[26] = ((noseZ - chinZ) / iod).coerceIn(-5f, 5f)
-        features[27] = d(33, 152)  // Left eye to chin
-        features[28] = d(263, 152) // Right eye to chin
-        features[29] = features[16] / (features[4].coerceAtLeast(0.01f))
-        features[30] = features[6] / (features[7].coerceAtLeast(0.01f))
-        features[31] = features[12] / (features[13].coerceAtLeast(0.01f))
-
-        // L2 Normalize
-        var norm = 0f
-        for (f in features) norm += f * f
-        norm = sqrt(norm).coerceAtLeast(1e-6f)
-        for (i in features.indices) features[i] /= norm
-
-        return BiometricVector(features)
+        outer: Int,
+        inner: Int,
+        top: Int,
+        bottom: Int
+    ): Float {
+        if (landmarks.size <= maxOf(outer, inner, top, bottom)) return 0.25f
+        val width = sqrt(
+            (landmarks[outer].x() - landmarks[inner].x()).let { it * it } +
+                (landmarks[outer].y() - landmarks[inner].y()).let { it * it }
+        ).coerceAtLeast(1e-4f)
+        val height = sqrt(
+            (landmarks[top].x() - landmarks[bottom].x()).let { it * it } +
+                (landmarks[top].y() - landmarks[bottom].y()).let { it * it }
+        )
+        return (height / width).coerceIn(0f, 1f)
     }
 
     /** MiniFASNet Silent-Face is the only PAD gate. */

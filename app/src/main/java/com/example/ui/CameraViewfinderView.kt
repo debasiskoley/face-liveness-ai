@@ -14,6 +14,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import kotlin.math.max
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -142,7 +143,9 @@ fun CameraViewfinderView(
                                 CameraSelector.DEFAULT_BACK_CAMERA
                             }
 
+                            // Smaller analysis frames keep MediaPipe + blink tracking responsive on CPU.
                             val imageAnalysis = ImageAnalysis.Builder()
+                                .setTargetResolution(android.util.Size(480, 640))
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                                 .build()
@@ -420,8 +423,12 @@ private fun processCameraFrame(
     var bmp: Bitmap? = null
     try {
         val rawBmp = imageProxy.toBitmap()
+        val rotation = imageProxy.imageInfo.rotationDegrees.toFloat()
+        val longest = max(rawBmp.width, rawBmp.height).toFloat().coerceAtLeast(1f)
+        val scale = (ANALYSIS_MAX_SIDE / longest).coerceAtMost(1f)
         val matrix = Matrix().apply {
-            postRotate(270f)
+            postScale(scale, scale)
+            postRotate(rotation)
         }
         bmp = Bitmap.createBitmap(rawBmp, 0, 0, rawBmp.width, rawBmp.height, matrix, true)
         if (rawBmp != bmp && !rawBmp.isRecycled) {
@@ -434,17 +441,15 @@ private fun processCameraFrame(
     if (bmp != null && mediaPipeHelper.isInitialized) {
         try {
             val mpResult = mediaPipeHelper.processBitmap(bmp, isFrontCamera)
-            if (mpResult.hasFace) {
-                onMediaPipeResult(mpResult, bmp)
-                imageProxy.close()
-                return
-            }
+            onMediaPipeResult(mpResult, if (mpResult.hasFace) bmp else null)
+            imageProxy.close()
+            return
         } catch (e: Exception) {
             Log.w(TAG, "MediaPipe run failed, falling back to ML Kit", e)
         }
     }
 
-    // Fallback detection via ML Kit
+    // Fallback detection via ML Kit (rare — only when MediaPipe is unavailable).
     val mediaImage = imageProxy.image
     if (mediaImage == null) {
         imageProxy.close()
@@ -467,3 +472,5 @@ private fun processCameraFrame(
             imageProxy.close()
         }
 }
+
+private const val ANALYSIS_MAX_SIDE = 480f

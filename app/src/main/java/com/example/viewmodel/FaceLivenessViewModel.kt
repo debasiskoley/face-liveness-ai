@@ -150,7 +150,11 @@ class FaceLivenessViewModel(
     private var officeInCompleteJob: Job? = null
     private var matchResultJob: Job? = null
     private var pendingMatchResult: MatchResultRequest? = null
-    private var blinkStage = 0 // 0: waiting for close, 1: closed, 2: reopened
+    /** 0 = wait for close, 1 = wait for reopen. */
+    private var blinkStage = 0
+    private var blinkClosedFrames = 0
+    private var blinkOpenFrames = 0
+    private var lastChallengeUiAtMs = 0L
 
     init {
         // Loading the ONNX model takes seconds on low-end devices; keep it off the main thread.
@@ -199,7 +203,7 @@ class FaceLivenessViewModel(
     fun startOfficeIn() {
         officeInCompleteJob?.cancel()
         officeInCompleteJob = null
-        blinkStage = 0
+        resetBlinkTracker()
         _uiState.update { it.copy(selectedTab = AppTab.HOME, currentScreen = AppScreen.MAIN_DASHBOARD) }
         if (!_uiState.value.hasCameraPermission && !_uiState.value.isSimulationMode) {
             enableSimulationMode(true)
@@ -211,7 +215,7 @@ class FaceLivenessViewModel(
     fun cancelOfficeIn() {
         officeInCompleteJob?.cancel()
         officeInCompleteJob = null
-        blinkStage = 0
+        resetBlinkTracker()
         biometricEngine.resetHistory()
         _uiState.update {
             it.copy(
@@ -708,7 +712,13 @@ class FaceLivenessViewModel(
     fun resetChallenges() {
         initChallenges()
         biometricEngine.resetHistory()
+        resetBlinkTracker()
+    }
+
+    private fun resetBlinkTracker() {
         blinkStage = 0
+        blinkClosedFrames = 0
+        blinkOpenFrames = 0
     }
 
     private fun initChallenges() {
@@ -839,24 +849,57 @@ class FaceLivenessViewModel(
             }
 
             ChallengeType.BLINK_EYES -> {
-                // MediaPipe blendshapes: prefer direct blink scores; softer thresholds for natural blinks.
+                // Blendshapes + EAR (lid height/width). Need close→open with a few frames each way
+                // so brief natural blinks count and half-closed squints do not.
                 val blinkL = metrics.blendshapes["eyeBlinkLeft"] ?: (1f - metrics.leftEyeOpenProb)
                 val blinkR = metrics.blendshapes["eyeBlinkRight"] ?: (1f - metrics.rightEyeOpenProb)
-                val bothClosed = blinkL >= 0.45f && blinkR >= 0.45f
-                val bothOpen = blinkL <= 0.30f && blinkR <= 0.30f
+                val earL = metrics.blendshapes["eyeAspectRatioLeft"] ?: 0.25f
+                val earR = metrics.blendshapes["eyeAspectRatioRight"] ?: 0.25f
+                val closedByBlend = blinkL >= BLINK_CLOSED_BLEND && blinkR >= BLINK_CLOSED_BLEND
+                val closedByEar = earL <= BLINK_CLOSED_EAR && earR <= BLINK_CLOSED_EAR
+                val openByBlend = blinkL <= BLINK_OPEN_BLEND && blinkR <= BLINK_OPEN_BLEND
+                val openByEar = earL >= BLINK_OPEN_EAR && earR >= BLINK_OPEN_EAR
+                val bothClosed = closedByBlend || closedByEar
+                val bothOpen = openByBlend || openByEar
 
                 when (blinkStage) {
-                    0 -> { // Waiting for eyes to close
+                    0 -> {
                         if (bothClosed) {
-                            blinkStage = 1
-                            stepProgress = 0.5f
+                            blinkClosedFrames++
+                            blinkOpenFrames = 0
+                            stepProgress = (blinkClosedFrames.toFloat() / BLINK_MIN_CLOSED_FRAMES)
+                                .coerceAtMost(0.5f)
+                            if (blinkClosedFrames >= BLINK_MIN_CLOSED_FRAMES) {
+                                blinkStage = 1
+                                blinkOpenFrames = 0
+                                stepProgress = 0.55f
+                            }
+                        } else {
+                            blinkClosedFrames = 0
+                            stepProgress = 0f
                         }
                     }
-                    1 -> { // Closed, waiting for eyes to open again
-                        if (bothOpen) {
-                            blinkStage = 2
-                            stepProgress = 1.0f
-                            stepCompleted = true
+                    1 -> {
+                        when {
+                            bothOpen -> {
+                                blinkOpenFrames++
+                                stepProgress = (0.55f + 0.45f *
+                                    (blinkOpenFrames.toFloat() / BLINK_MIN_OPEN_FRAMES))
+                                    .coerceAtMost(1f)
+                                if (blinkOpenFrames >= BLINK_MIN_OPEN_FRAMES) {
+                                    stepProgress = 1f
+                                    stepCompleted = true
+                                }
+                            }
+                            bothClosed -> {
+                                // Still closed — keep waiting for reopen; do not reset stage.
+                                blinkOpenFrames = 0
+                                stepProgress = 0.55f
+                            }
+                            else -> {
+                                // Ambiguous mid-blink — do not reset closed credit.
+                                blinkOpenFrames = 0
+                            }
                         }
                     }
                 }
@@ -906,7 +949,7 @@ class FaceLivenessViewModel(
                         challengeStatusText = updatedList[nextIndex].type.instruction
                     )
                 }
-                blinkStage = 0
+                resetBlinkTracker()
             } else {
                 // All challenges successfully passed!
                 _uiState.update {
@@ -921,7 +964,7 @@ class FaceLivenessViewModel(
 
                 officeInCompleteJob?.cancel()
                 officeInCompleteJob = viewModelScope.launch {
-                    delay(900)
+                    delay(350)
                     if (_uiState.value.isLivenessVerified && _uiState.value.isOfficeInActive) {
                         completeOfficeIn()
                     }
@@ -929,9 +972,23 @@ class FaceLivenessViewModel(
                 }
             }
         } else {
-            val updatedList = state.challenges.toMutableList()
-            updatedList[state.currentChallengeIndex] = currentStep.copy(progress = stepProgress)
-            _uiState.update { it.copy(challenges = updatedList) }
+            // Throttle non-blink UI churn so Compose does not rebuild every camera frame.
+            val now = System.currentTimeMillis()
+            val isBlink = currentStep.type == ChallengeType.BLINK_EYES
+            val progressDelta = abs(stepProgress - currentStep.progress)
+            if (isBlink || progressDelta >= 0.08f || now - lastChallengeUiAtMs >= 66L) {
+                lastChallengeUiAtMs = now
+                val updatedList = state.challenges.toMutableList()
+                updatedList[state.currentChallengeIndex] = currentStep.copy(progress = stepProgress)
+                val status = when {
+                    !isBlink -> state.challengeStatusText
+                    blinkStage == 0 -> "Blink both eyes"
+                    else -> "Open your eyes"
+                }
+                _uiState.update {
+                    it.copy(challenges = updatedList, challengeStatusText = status)
+                }
+            }
         }
     }
 
@@ -1198,5 +1255,13 @@ class FaceLivenessViewModel(
         const val ISO_OFFSET_PATTERN = "yyyy-MM-dd'T'HH:mm:ssXXX"
         const val CAPTURE_MAX_SIDE = 480
         const val CAPTURE_JPEG_QUALITY = 85
+
+        // Blink: blendshape close ≥ 0.38, EAR ≤ 0.17; reopen blend ≤ 0.28 or EAR ≥ 0.21.
+        const val BLINK_CLOSED_BLEND = 0.38f
+        const val BLINK_OPEN_BLEND = 0.28f
+        const val BLINK_CLOSED_EAR = 0.17f
+        const val BLINK_OPEN_EAR = 0.21f
+        const val BLINK_MIN_CLOSED_FRAMES = 2
+        const val BLINK_MIN_OPEN_FRAMES = 2
     }
 }
