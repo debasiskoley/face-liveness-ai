@@ -5,12 +5,15 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class EnrollFaceRequest(
     val mobileNumber: String,
-    val face: FacePayload
+    /** Pose templates: front, left, right, up, down. */
+    val faces: List<FacePayload>
 )
 
 @JsonClass(generateAdapter = true)
 data class FacePayload(
     val faceId: String? = null,
+    /** Pose label: front | left | right | up | down */
+    val pose: String? = null,
     val embedding: List<Float>? = null,
     val embeddingDim: Int? = null,
     val normalized: Boolean? = null,
@@ -22,14 +25,21 @@ data class EnrollFaceResponse(
     val mobileNumber: String? = null,
     val faceId: String? = null,
     val face: FacePayload? = null,
-    val enrolledAt: String? = null
+    val faces: List<FacePayload>? = null,
+    val enrolledAt: String? = null,
+    val message: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class EmployeeFaceResponse(
     val employee: EmployeeDto? = null,
-    val face: FacePayload? = null
-)
+    /** Pose templates from GET /api/employees/face (front, left, right, …). */
+    val faces: List<FacePayload>? = null
+) {
+    /** Usable ArcFace templates only (non-empty embeddings). */
+    fun templates(): List<FacePayload> =
+        faces.orEmpty().filter { !it.embedding.isNullOrEmpty() }
+}
 
 @JsonClass(generateAdapter = true)
 data class EmployeeDto(

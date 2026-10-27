@@ -14,6 +14,7 @@ import com.example.data.remote.RegisterDeviceRequest
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EnrollFaceRequestJsonTest {
@@ -21,38 +22,72 @@ class EnrollFaceRequestJsonTest {
   private val moshi = Moshi.Builder().build()
 
   @Test
-  fun `enroll request serializes to the agreed API shape`() {
+  fun `enroll request serializes mobileNumber and faces poses only`() {
+    val front = FacePayload(
+        pose = "front",
+        embedding = listOf(0.5f, -0.25f),
+        embeddingDim = 2,
+        normalized = true,
+        imageBase64 = "AAA="
+    )
+    val left = FacePayload(
+        pose = "left",
+        embedding = listOf(0.1f, 0.2f),
+        embeddingDim = 2,
+        normalized = true,
+        imageBase64 = "BBB="
+    )
+    val right = FacePayload(
+        pose = "right",
+        embedding = listOf(-0.1f, 0.3f),
+        embeddingDim = 2,
+        normalized = true,
+        imageBase64 = "CCC="
+    )
     val request = EnrollFaceRequest(
         mobileNumber = "9876543210",
-        face = FacePayload(
-            embedding = listOf(0.5f, -0.25f),
-            embeddingDim = 2,
-            normalized = true,
-            imageBase64 = "AAA="
-        )
+        faces = listOf(front, left, right)
     )
 
     val json = moshi.adapter(EnrollFaceRequest::class.java).toJson(request)
 
     assertEquals(
-        """{"mobileNumber":"9876543210","face":{"embedding":[0.5,-0.25],""" +
-            """"embeddingDim":2,"normalized":true,"imageBase64":"AAA="}}""",
+        """{"mobileNumber":"9876543210","faces":[""" +
+            """{"pose":"front","embedding":[0.5,-0.25],"embeddingDim":2,"normalized":true,"imageBase64":"AAA="},""" +
+            """{"pose":"left","embedding":[0.1,0.2],"embeddingDim":2,"normalized":true,"imageBase64":"BBB="},""" +
+            """{"pose":"right","embedding":[-0.1,0.3],"embeddingDim":2,"normalized":true,"imageBase64":"CCC="}]}""",
         json
     )
   }
 
   @Test
-  fun `employee face response parses the get-face API shape`() {
+  fun `employee face response parses multi-pose faces list`() {
     val json = """
       {"employee":{"employeeId":"E1","name":"Asha","mobileNumber":"9999999999"},
-       "face":{"faceId":"f-1","embedding":[0.6,0.8],"embeddingDim":2,"normalized":true,"imageBase64":"AAA="}}
+       "faces":[
+         {"pose":"front","faceId":"f-1","embedding":[0.6,0.8],"embeddingDim":2,"normalized":true},
+         {"pose":"left","faceId":"f-2","embedding":[0.1,0.2],"embeddingDim":2,"normalized":true}
+       ]}
     """.trimIndent()
 
     val response = moshi.adapter(EmployeeFaceResponse::class.java).fromJson(json)!!
 
     assertEquals("Asha", response.employee?.name)
-    assertEquals("f-1", response.face?.faceId)
-    assertEquals(listOf(0.6f, 0.8f), response.face?.embedding)
+    assertEquals(2, response.templates().size)
+    assertEquals("front", response.templates()[0].pose)
+    assertEquals(listOf(0.1f, 0.2f), response.templates()[1].embedding)
+  }
+
+  @Test
+  fun `employee face response with empty faces yields no templates`() {
+    val json = """
+      {"employee":{"employeeId":"E1","name":"Asha","mobileNumber":"9999999999"},
+       "faces":[]}
+    """.trimIndent()
+
+    val response = moshi.adapter(EmployeeFaceResponse::class.java).fromJson(json)!!
+
+    assertTrue(response.templates().isEmpty())
   }
 
   @Test
@@ -129,12 +164,18 @@ class EnrollFaceRequestJsonTest {
   }
 
   @Test
-  fun `all employee faces list parses without mobileNumber`() {
+  fun `all employee faces list parses faces poses without mobileNumber`() {
     val json = """
       [{"employee":{"employeeId":"1001","name":"Asha","mobileNumber":"9999999999"},
-        "face":{"faceId":"f_1","embedding":[0.1,0.2],"embeddingDim":2,"normalized":true}},
+        "faces":[
+          {"pose":"front","embedding":[0.1,0.2],"embeddingDim":2,"normalized":true},
+          {"pose":"left","embedding":[0.15,0.25],"embeddingDim":2,"normalized":true},
+          {"pose":"right","embedding":[0.05,0.22],"embeddingDim":2,"normalized":true}
+        ]},
        {"employee":{"employeeId":"1002","name":"Ravi","mobileNumber":"9888888888"},
-        "face":{"faceId":"f_2","embedding":[0.3],"embeddingDim":1,"normalized":true}}]
+        "faces":[
+          {"pose":"front","embedding":[0.3,0.4],"embeddingDim":2,"normalized":true}
+        ]}]
     """.trimIndent()
     val type = com.squareup.moshi.Types.newParameterizedType(
         List::class.java,
@@ -144,8 +185,10 @@ class EnrollFaceRequestJsonTest {
 
     assertEquals(2, list.size)
     assertEquals("Asha", list[0].employee?.name)
-    assertEquals("f_2", list[1].face?.faceId)
-    assertEquals(listOf(0.3f), list[1].face?.embedding)
+    assertEquals(3, list[0].templates().size)
+    assertEquals("left", list[0].templates()[1].pose)
+    assertEquals("front", list[1].templates().single().pose)
+    assertEquals(listOf(0.3f, 0.4f), list[1].templates().single().embedding)
   }
 
   @Test

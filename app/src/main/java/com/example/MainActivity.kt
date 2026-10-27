@@ -139,7 +139,11 @@ fun FaceLivenessRoot(
     }
 
     when (route) {
-        AppRoute.SPLASH -> SplashScreen(onFinished = { route = AppRoute.WELCOME })
+        AppRoute.SPLASH -> SplashScreen(
+            statusText = uiState.faceCacheStatusText ?: "Loading…",
+            prepare = { viewModel.ensureFaceCacheOnInit() },
+            onFinished = { route = AppRoute.WELCOME }
+        )
 
         AppRoute.WELCOME -> {
             LaunchedEffect(Unit) { deviceViewModel.refreshRegistration() }
@@ -210,8 +214,12 @@ fun FaceLivenessRoot(
             SettingsScreen(
                 matchConfig = uiState.matchConfig,
                 registeredGateName = deviceState.registeredGate?.gateName,
+                faceCacheCount = uiState.faceCacheCount,
+                isSyncingFaces = uiState.isSyncingFaces,
+                faceCacheStatusText = uiState.faceCacheStatusText,
                 onThresholdChange = viewModel::updateMatchThreshold,
                 onMaxSpoofChange = viewModel::updateMaxSpoofProbability,
+                onRefreshFaceCache = viewModel::refreshFaceCache,
                 onRegisterDevice = {
                     deviceViewModel.open()
                     showRegisterDevice = true
@@ -239,7 +247,10 @@ fun FaceLivenessRoot(
                 mobileNumber = enrollMobile,
                 viewModel = enrollViewModel,
                 onBack = leaveEnroll,
-                onEnrolled = leaveEnroll
+                onEnrolled = {
+                    viewModel.syncFaceCacheAfterEnroll()
+                    leaveEnroll()
+                }
             )
         }
 

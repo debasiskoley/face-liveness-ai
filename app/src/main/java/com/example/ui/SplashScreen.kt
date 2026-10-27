@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -24,21 +25,31 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AppPrimary
+import com.example.ui.theme.AppTextMuted
 import kotlinx.coroutines.delay
 
-private const val SPLASH_DURATION_MS = 1500L
+private const val SPLASH_MIN_DURATION_MS = 900L
 
 @Composable
-fun SplashScreen(onFinished: () -> Unit) {
+fun SplashScreen(
+    statusText: String? = null,
+    prepare: suspend () -> Unit = {},
+    onFinished: () -> Unit
+) {
     val currentOnFinished by rememberUpdatedState(onFinished)
+    val currentPrepare by rememberUpdatedState(prepare)
     LaunchedEffect(Unit) {
-        delay(SPLASH_DURATION_MS)
+        val started = System.currentTimeMillis()
+        currentPrepare()
+        val elapsed = System.currentTimeMillis() - started
+        val remaining = SPLASH_MIN_DURATION_MS - elapsed
+        if (remaining > 0) delay(remaining)
         currentOnFinished()
     }
 
@@ -51,7 +62,8 @@ fun SplashScreen(onFinished: () -> Unit) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
         ) {
             AppLogo(size = 96)
             Spacer(modifier = Modifier.height(20.dp))
@@ -73,6 +85,15 @@ fun SplashScreen(onFinished: () -> Unit) {
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(24.dp)
             )
+            if (!statusText.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = statusText,
+                    fontSize = 12.sp,
+                    color = AppTextMuted,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

@@ -22,6 +22,7 @@ Android app for **office attendance** with on-device face liveness, anti-spoofin
 - **Passive anti-spoof** — MiniFASNetV2 print / replay detection on live frames
 - **Identity match** — ArcFace embeddings compared to enrolled templates
 - **Profiles** — enroll / edit / delete people with photo and contact details
+- **Multi-pose enroll** — guided Front / Left / Right / Up / Down ArcFace templates uploaded together
 - **Offline-first** — models and matching run on-device (no cloud required for core flow)
 
 ---

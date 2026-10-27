@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AppRegistration
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,8 +53,12 @@ import java.util.Locale
 fun SettingsScreen(
     matchConfig: MatchConfig,
     registeredGateName: String? = null,
+    faceCacheCount: Int = 0,
+    isSyncingFaces: Boolean = false,
+    faceCacheStatusText: String? = null,
     onThresholdChange: (Float) -> Unit,
     onMaxSpoofChange: (Float) -> Unit,
+    onRefreshFaceCache: () -> Unit = {},
     onRegisterDevice: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -117,6 +123,59 @@ fun SettingsScreen(
                         value = matchConfig.maxSpoofProbability,
                         onValueChange = onMaxSpoofChange,
                         testTag = "max_spoof_slider"
+                    )
+                }
+            }
+
+            SectionTitle("Face cache")
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isSyncingFaces, onClick = onRefreshFaceCache)
+                    .testTag("settings_refresh_face_cache_row"),
+                shape = RoundedCornerShape(16.dp),
+                color = AppSurface,
+                border = BorderStroke(1.dp, AppBorder)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isSyncingFaces) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = AppButton
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = AppButton,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Refresh face cache",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppText
+                        )
+                        Text(
+                            text = faceCacheStatusText
+                                ?: "$faceCacheCount pose templates stored locally",
+                            fontSize = 12.sp,
+                            color = AppTextMuted
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = AppTextMuted
                     )
                 }
             }

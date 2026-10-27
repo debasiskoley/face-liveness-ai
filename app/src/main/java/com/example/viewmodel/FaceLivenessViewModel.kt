@@ -10,9 +10,11 @@ import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.BuildConfig
+import com.example.data.local.FaceCacheRepository
 import com.example.data.remote.ApiClient
 import com.example.data.remote.DeviceInfoPayload
 import com.example.data.remote.EmployeeFaceResponse
+import com.example.data.remote.FacePayload
 import com.example.data.remote.LivenessPayload
 import com.example.data.remote.MatchResultRequest
 import com.example.data.remote.MatchResultResponse
@@ -101,6 +103,11 @@ data class FaceLivenessUiState(
     /** True after "Start Recognize": match 1:N against the full enrolled list. */
     val isRecognizeMode: Boolean = false,
 
+    /** Local Room face-cache sync (first init / manual refresh). */
+    val isSyncingFaces: Boolean = false,
+    val faceCacheCount: Int = 0,
+    val faceCacheStatusText: String? = null,
+
     val isPostingMatchResult: Boolean = false,
     val matchResultMessage: MatchResultMessage? = null
 )
@@ -132,6 +139,7 @@ class FaceLivenessViewModel(
 
     private val biometricEngine: FaceBiometricEngine = FaceBiometricEngine()
     private val identityEmbedder: ArcFaceEmbedder by lazy { ArcFaceEmbedder.getInstance(application) }
+    private val faceCache: FaceCacheRepository = FaceCacheRepository.get(application)
     private val settingsPrefs =
         application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -259,13 +267,97 @@ class FaceLivenessViewModel(
         _uiState.update { it.copy(currentScreen = screen) }
     }
 
+    /**
+     * First-launch (or empty DB) sync of GET /api/employees/face into Room.
+     * Subsequent launches reuse the local cache so recognize/login avoid the list GET.
+     */
+    suspend fun ensureFaceCacheOnInit() {
+        _uiState.update {
+            it.copy(
+                isSyncingFaces = true,
+                faceCacheStatusText = "Preparing local face cache…"
+            )
+        }
+        try {
+            val hadCache = faceCache.hasCachedFaces()
+            if (!hadCache) {
+                _uiState.update { it.copy(faceCacheStatusText = "Downloading enrolled faces…") }
+            }
+            val count = faceCache.ensureSynced()
+            _uiState.update {
+                it.copy(
+                    isSyncingFaces = false,
+                    faceCacheCount = count,
+                    faceCacheStatusText = if (count == 0) {
+                        "No enrolled faces yet"
+                    } else {
+                        null
+                    }
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val local = runCatching { faceCache.count() }.getOrDefault(0)
+            _uiState.update {
+                it.copy(
+                    isSyncingFaces = false,
+                    faceCacheCount = local,
+                    faceCacheStatusText = if (local > 0) {
+                        null
+                    } else {
+                        describeLoginError(e)
+                    }
+                )
+            }
+        }
+    }
+
+    /** Force re-download of the face list into Room (Settings → Refresh face cache). */
+    fun refreshFaceCache() {
+        if (_uiState.value.isSyncingFaces) return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isSyncingFaces = true, faceCacheStatusText = "Refreshing face cache…")
+            }
+            try {
+                val count = faceCache.syncFromApi()
+                _uiState.update {
+                    it.copy(
+                        isSyncingFaces = false,
+                        faceCacheCount = count,
+                        faceCacheStatusText = "Cached $count face templates"
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSyncingFaces = false,
+                        faceCacheStatusText = describeLoginError(e)
+                    )
+                }
+            }
+        }
+    }
+
+    /** Re-sync after a successful enroll so local matching stays current. */
+    fun syncFaceCacheAfterEnroll() {
+        viewModelScope.launch {
+            runCatching { faceCache.syncFromApi() }
+                .onSuccess { count ->
+                    _uiState.update { it.copy(faceCacheCount = count) }
+                }
+        }
+    }
+
     fun loginWithFace(mobileNumber: String, deviceId: String, gateId: Int?) {
         if (_uiState.value.isLoggingIn) return
         _uiState.update { it.copy(isLoggingIn = true) }
         loginJob = viewModelScope.launch {
             val event = try {
-                val response = ApiClient.faceApi.getEmployeeFace(mobileNumber)
-                startSession(mobileNumber, response, deviceId, gateId)
+                startSessionFromLocalOrApi(mobileNumber, deviceId, gateId)
                 LoginEvent.Success
             } catch (e: CancellationException) {
                 throw e
@@ -278,8 +370,8 @@ class FaceLivenessViewModel(
     }
 
     /**
-     * Loads every enrolled face from GET /api/employees/face (no mobileNumber), then opens the
-     * dashboard. Record presence matches 1:N against that list.
+     * Opens the dashboard and matches 1:N against the local Room face cache
+     * (populated on first app init / refresh).
      */
     fun startRecognize(deviceId: String, gateId: Int?) {
         if (_uiState.value.isLoggingIn) return
@@ -298,41 +390,96 @@ class FaceLivenessViewModel(
         }
     }
 
-    private suspend fun startSession(
+    private suspend fun startSessionFromLocalOrApi(
+        mobileNumber: String,
+        deviceId: String,
+        gateId: Int?
+    ) {
+        val config = _uiState.value.matchConfig
+        var profiles = faceCache.loadProfilesByMobile(mobileNumber, config.embeddingDim)
+        if (profiles.isEmpty()) {
+            val response = ApiClient.faceApi.getEmployeeFace(mobileNumber)
+            faceCache.upsertEmployee(response)
+            profiles = faceCache.loadProfilesByMobile(mobileNumber, config.embeddingDim)
+            if (profiles.isEmpty()) {
+                // API returned data Room couldn't map (dim mismatch) — fall back to in-memory.
+                startSessionFromResponse(mobileNumber, response, deviceId, gateId)
+                return
+            }
+        }
+        applyLoginProfiles(
+            mobileNumber = mobileNumber,
+            profiles = profiles,
+            deviceId = deviceId,
+            gateId = gateId
+        )
+    }
+
+    private suspend fun startSessionFromResponse(
         mobileNumber: String,
         response: EmployeeFaceResponse,
         deviceId: String,
         gateId: Int?
     ) {
-        val face = response.face
-        val embedding = face?.embedding.orEmpty()
         val config = _uiState.value.matchConfig
-        if (embedding.isEmpty()) throw IllegalStateException("No face enrolled for this mobile number.")
-        if (embedding.size != config.embeddingDim) {
-            throw IllegalStateException(
-                "Enrolled face has ${embedding.size} values; this app needs ${config.embeddingDim}. Re-enroll the face."
-            )
-        }
+        val templates = response.templates()
+        if (templates.isEmpty()) throw IllegalStateException("No face enrolled for this mobile number.")
 
         val employee = response.employee
         val name = employee?.name?.takeIf { it.isNotBlank() } ?: "+91 $mobileNumber"
-        val profile = EnrolledProfile(
-            id = face?.faceId ?: employee?.employeeId ?: mobileNumber,
+        val employeeId = employee?.employeeId.orEmpty()
+        val baseId = employeeId.ifBlank {
+            templates.firstOrNull()?.faceId?.takeIf { it.isNotBlank() } ?: mobileNumber
+        }
+        val profiles = templatesToProfiles(
+            templates = templates,
             name = name,
-            enrolledDate = "",
-            vector = BiometricVector(embedding.toFloatArray()),
-            photoUri = face?.imageBase64?.let { saveEnrolledFacePhoto(it, face.faceId ?: mobileNumber) },
             mobileNo = employee?.mobileNumber ?: mobileNumber,
-            employeeId = employee?.employeeId.orEmpty()
+            employeeId = employeeId,
+            baseId = baseId,
+            embeddingDim = config.embeddingDim
         )
+        if (profiles.isEmpty()) {
+            throw IllegalStateException(
+                "Enrolled face templates are not ${config.embeddingDim}-D. Re-enroll the face."
+            )
+        }
+        applyLoginProfiles(
+            mobileNumber = mobileNumber,
+            profiles = profiles,
+            deviceId = deviceId,
+            gateId = gateId,
+            employeeIdOverride = employeeId,
+            employeeNameOverride = name
+        )
+    }
+
+    private fun applyLoginProfiles(
+        mobileNumber: String,
+        profiles: List<EnrolledProfile>,
+        deviceId: String,
+        gateId: Int?,
+        employeeIdOverride: String? = null,
+        employeeNameOverride: String? = null
+    ) {
+        if (profiles.isEmpty()) {
+            throw IllegalStateException("No face enrolled for this mobile number.")
+        }
+        val employeeId = employeeIdOverride
+            ?: profiles.firstOrNull()?.employeeId.orEmpty()
+        val name = employeeNameOverride
+            ?: profiles.firstOrNull()?.name
+            ?: "+91 $mobileNumber"
+        val primaryFaceId = profiles.firstOrNull { it.pose.equals("front", ignoreCase = true) }?.id
+            ?: profiles.first().id
 
         _uiState.update {
             it.copy(
                 mobileNumber = mobileNumber,
-                employeeId = employee?.employeeId.orEmpty(),
+                employeeId = employeeId,
                 employeeName = name,
-                enrolledProfiles = listOf(profile),
-                faceId = face?.faceId.orEmpty(),
+                enrolledProfiles = profiles,
+                faceId = primaryFaceId,
                 deviceId = deviceId,
                 gateId = gateId,
                 isRecognizeMode = false,
@@ -344,59 +491,72 @@ class FaceLivenessViewModel(
     }
 
     private suspend fun startRecognizeSession(deviceId: String, gateId: Int?) {
-        val responses = ApiClient.faceApi.getAllEmployeeFaces()
-        if (responses.isEmpty()) {
-            throw IllegalStateException("No enrolled faces found on the server.")
-        }
-
         clearEnrolledFacePhotos()
         val config = _uiState.value.matchConfig
-        val profiles = ArrayList<EnrolledProfile>()
-        for (response in responses) {
-            val face = response.face ?: continue
-            val embedding = face.embedding.orEmpty()
-            if (embedding.size != config.embeddingDim) continue
-
-            val employee = response.employee
-            val faceId = face.faceId?.takeIf { it.isNotBlank() }
-                ?: employee?.employeeId?.takeIf { it.isNotBlank() }
-                ?: continue
-            val name = employee?.name?.takeIf { it.isNotBlank() }
-                ?: employee?.mobileNumber?.let { "+91 $it" }
-                ?: faceId
-            profiles.add(
-                EnrolledProfile(
-                    id = faceId,
-                    name = name,
-                    enrolledDate = "",
-                    vector = BiometricVector(embedding.toFloatArray()),
-                    photoUri = face.imageBase64?.let { saveEnrolledFacePhoto(it, faceId) },
-                    mobileNo = employee?.mobileNumber.orEmpty(),
-                    employeeId = employee?.employeeId.orEmpty()
-                )
-            )
+        var profiles = faceCache.loadAllProfiles(config.embeddingDim)
+        if (profiles.isEmpty()) {
+            faceCache.syncFromApi()
+            profiles = faceCache.loadAllProfiles(config.embeddingDim)
         }
         if (profiles.isEmpty()) {
             throw IllegalStateException(
-                "No usable ${config.embeddingDim}-D face templates found. Re-enroll faces on the server."
+                "No usable ${config.embeddingDim}-D face templates in the local cache. " +
+                    "Enroll faces or refresh the face cache in Settings."
             )
         }
 
+        val employeeCount = profiles.map { it.employeeId.ifBlank { it.id } }.distinct().size
         _uiState.update {
             it.copy(
                 mobileNumber = "",
                 employeeId = "",
-                employeeName = "Recognize · ${profiles.size} faces",
+                employeeName = "Recognize · $employeeCount people · ${profiles.size} poses",
                 enrolledProfiles = profiles,
                 faceId = "",
                 deviceId = deviceId,
                 gateId = gateId,
                 isRecognizeMode = true,
+                faceCacheCount = profiles.size,
                 currentScreen = AppScreen.MAIN_DASHBOARD,
                 identityMatch = IdentityMatchResult(),
                 matchResultMessage = null
             )
         }
+    }
+
+    /**
+     * Expands GET /api/employees/face `faces` into one [EnrolledProfile] per usable pose template.
+     * Profile id prefers server faceId, otherwise [baseId] (employee id) so match-result can post it.
+     */
+    private suspend fun templatesToProfiles(
+        templates: List<FacePayload>,
+        name: String,
+        mobileNo: String,
+        employeeId: String,
+        baseId: String,
+        embeddingDim: Int
+    ): List<EnrolledProfile> {
+        val profiles = ArrayList<EnrolledProfile>()
+        for ((index, face) in templates.withIndex()) {
+            val embedding = face.embedding.orEmpty()
+            if (embedding.size != embeddingDim) continue
+            val pose = face.pose?.takeIf { it.isNotBlank() } ?: "face$index"
+            val id = face.faceId?.takeIf { it.isNotBlank() } ?: baseId
+            profiles.add(
+                EnrolledProfile(
+                    id = id,
+                    name = name,
+                    enrolledDate = "",
+                    vector = BiometricVector(embedding.toFloatArray()),
+                    photoUri = face.imageBase64?.let { saveEnrolledFacePhoto(it, "${id}_$pose") },
+                    mobileNo = mobileNo,
+                    employeeId = employeeId,
+                    notes = pose,
+                    pose = pose
+                )
+            )
+        }
+        return profiles
     }
 
     /** Writes the server face crop to cache so the result screen can show it; returns a file URI. */

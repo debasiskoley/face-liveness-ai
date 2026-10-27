@@ -171,7 +171,9 @@ data class EnrolledProfile(
     val address: String = "",
     val mobileNo: String = "",
     val email: String = "",
-    val employeeId: String = ""
+    val employeeId: String = "",
+    /** Pose label from the server template: front | left | right | up | down */
+    val pose: String = ""
 )
 
 /**
