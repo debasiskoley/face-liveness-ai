@@ -240,7 +240,7 @@ class MediaPipeFaceLandmarkerHelper(
                 silentPad = silentPad
             )
 
-            // ArcFace match uses the live bitmap later — skip the unused 32-D mesh vector.
+            // EdgeFace match uses the live bitmap later — skip the unused 32-D mesh vector.
             return MediaPipeAnalysisResult(
                 hasFace = true,
                 metrics = faceMetrics,

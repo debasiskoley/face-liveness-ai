@@ -36,7 +36,7 @@ data class EmployeeFaceResponse(
     /** Pose templates from GET /api/employees/face (front, left, right, …). */
     val faces: List<FacePayload>? = null
 ) {
-    /** Usable ArcFace templates only (non-empty embeddings). */
+    /** Usable EdgeFace templates only (non-empty embeddings). */
     fun templates(): List<FacePayload> =
         faces.orEmpty().filter { !it.embedding.isNullOrEmpty() }
 }

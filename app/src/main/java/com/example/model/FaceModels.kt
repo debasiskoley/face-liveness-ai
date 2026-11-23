@@ -177,7 +177,7 @@ data class EnrolledProfile(
 )
 
 /**
- * 1:N identity check of a live crop against enrolled ArcFace templates.
+ * 1:N identity check of a live crop against enrolled EdgeFace templates.
  */
 data class IdentityMatchResult(
     val isMatch: Boolean = false,

@@ -11,7 +11,7 @@ Android app for **office attendance** with on-device face liveness, anti-spoofin
 | **Camera** | CameraX |
 | **Liveness** | MediaPipe Face Landmarker (mesh + blendshapes) |
 | **Anti-spoof** | MiniFASNetV2 ONNX (Silent-Face) |
-| **Identity** | ArcFace ONNX (`w600k_mbf`) + cosine match |
+| **Identity** | EdgeFace-S ONNX (`edgeface_s_gamma_05`) + cosine match |
 | **Storage** | Room (enrolled profiles) |
 
 ---
@@ -20,9 +20,9 @@ Android app for **office attendance** with on-device face liveness, anti-spoofin
 
 - **Record Presence flow** — guided active liveness (center face, blink, smile, turn, nod)
 - **Passive anti-spoof** — MiniFASNetV2 print / replay detection on live frames
-- **Identity match** — ArcFace embeddings compared to enrolled templates
+- **Identity match** — EdgeFace-S embeddings compared to enrolled templates
 - **Profiles** — enroll / edit / delete people with photo and contact details
-- **Multi-pose enroll** — guided Front / Left / Right / Up / Down ArcFace templates uploaded together
+- **Multi-pose enroll** — guided Front / Left / Right / Up / Down EdgeFace templates uploaded together
 - **Offline-first** — models and matching run on-device (no cloud required for core flow)
 
 ---
@@ -46,7 +46,7 @@ flowchart TB
   subgraph ML["On-device ML"]
     MP[MediaPipe Face Landmarker]
     PAD[SilentFaceAntiSpoof<br/>MiniFASNetV2.onnx]
-    AF[ArcFaceEmbedder<br/>w600k_mbf.onnx]
+    AF[ArcFaceEmbedder<br/>edgeface_s_gamma_05.onnx]
     FBE[FaceBiometricEngine]
   end
 
@@ -74,7 +74,7 @@ app/src/main/java/com/example/
 ├── ui/                          # Compose screens + camera overlay
 ├── viewmodel/                   # FaceLivenessViewModel + UI state
 ├── mediapipe/                   # Face Landmarker helper
-├── ml/                          # ArcFace, MiniFASNet, biometrics
+├── ml/                          # EdgeFace, MiniFASNet, biometrics
 ├── data/                        # Repository + Room
 └── model/                       # Metrics, challenges, profiles
 ```
@@ -91,7 +91,7 @@ sequenceDiagram
   participant MP as MediaPipe
   participant PAD as MiniFASNet
   participant VM as ViewModel
-  participant AF as ArcFace
+  participant AF as EdgeFace
   participant DB as Room
 
   User->>Home: Tap Mark Presence
@@ -119,7 +119,7 @@ flowchart LR
   C --> D[Turn Left / Right]
   D --> E[Nod Head]
   E --> F{PAD: live?}
-  F -->|Yes| G[ArcFace match]
+  F -->|Yes| G[EdgeFace match]
   F -->|Spoof| H[Reject / retry]
   G --> I[Record Presence success]
 ```
@@ -134,7 +134,7 @@ Bundled under `app/src/main/assets/`:
 |-------|------|--------------|
 | `face_landmarker.task` | MediaPipe Face Landmarker (478 landmarks, blendshapes) | ~3.6 MB |
 | `MiniFASNetV2.onnx` | Silent-Face anti-spoof (real vs print/replay) | ~1.7 MB |
-| `w600k_mbf.onnx` | ArcFace mobile backbone (112×112 → 512-D) | ~13 MB |
+| `edgeface_s_gamma_05.onnx` + `.onnx.data` | EdgeFace-S (112×112 → 512-D). Weights are in the `.data` file, 64-byte aligned for 32-bit ARM | ~15 MB |
 
 ONNX runs via **ONNX Runtime Android**. MediaPipe uses the CPU delegate for broad device support.
 
@@ -165,9 +165,9 @@ Versions are managed in [`gradle/libs.versions.toml`](gradle/libs.versions.toml)
 
 - **MediaPipe Face Landmarker** — [`com.google.mediapipe:tasks-vision`](https://developers.google.com/mediapipe/solutions/vision/face_landmarker)
 - **ML Kit Face Detection** — [`com.google.mlkit:face-detection`](https://developers.google.com/ml-kit/vision/face-detection)
-- **MiniFASNetV2 + ArcFace ONNX** — [`com.microsoft.onnxruntime:onnxruntime-android`](https://onnxruntime.ai/docs/install/#install-on-android)  
+- **MiniFASNetV2 + EdgeFace-S ONNX** — [`com.microsoft.onnxruntime:onnxruntime-android`](https://onnxruntime.ai/docs/install/#install-on-android)  
   - MiniFASNetV2 (Silent-Face): [minivision-ai/Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing)  
-  - ArcFace (`w600k_mbf.onnx`): on-device identity embedding via ONNX Runtime
+  - EdgeFace-S (`edgeface_s_gamma_05.onnx`): on-device identity embedding via ONNX Runtime
 
 ---
 
@@ -238,7 +238,7 @@ See also [`NOTICE`](NOTICE) for third-party attribution.
 | **ML Kit Face Detection** | [ML Kit Terms of Service](https://developers.google.com/ml-kit/terms) | **Yes** for on-device SDK use; do not reverse-engineer models |
 | **ONNX Runtime Android** | [MIT](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) | **Yes** |
 | **MiniFASNetV2** (Silent-Face open-source) | [Apache License 2.0](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) | **Yes** for the published open-source models, with attribution |
-| **ArcFace ONNX** (`w600k_mbf.onnx`) | Upstream model / weight license | **Verify separately** — Apache-2.0 on this repo does **not** relicense those weights |
+| **EdgeFace-S ONNX** (`edgeface_s_gamma_05.onnx`) | Upstream model / weight license | **Verify separately** — Apache-2.0 on this repo does **not** relicense those weights |
 
 Also follow privacy / biometric consent rules in your jurisdiction. This section is **not legal advice**.
 

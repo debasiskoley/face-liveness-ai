@@ -319,7 +319,7 @@ private fun EnrollStatusCard(uiState: EnrollFaceUiState) {
     val (message, color) = when {
         error != null -> error to AppError
         uiState.isSubmitting -> "Uploading ${uiState.capturedCount} pose templates…" to AppText
-        uiState.isCapturingPose -> "Creating ArcFace template for ${pose.title}…" to AppText
+        uiState.isCapturingPose -> "Creating EdgeFace template for ${pose.title}…" to AppText
         uiState.allPosesCaptured -> "All poses captured. Tap Submit all poses." to AppSuccess
         hint != null -> hint to AppWarning
         !uiState.metrics.hasFace -> "Position your face inside the frame" to AppTextMuted

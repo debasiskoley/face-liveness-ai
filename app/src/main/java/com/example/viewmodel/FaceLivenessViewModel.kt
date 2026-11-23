@@ -162,11 +162,6 @@ class FaceLivenessViewModel(
     private var blinkOpenFrames = 0
     private var lastChallengeUiAtMs = 0L
 
-    init {
-        // Loading the ONNX model takes seconds on low-end devices; keep it off the main thread.
-        viewModelScope.launch(Dispatchers.Default) { identityEmbedder }
-    }
-
     fun updateMatchThreshold(value: Float) {
         val threshold = value.coerceIn(MATCH_SLIDER_MIN, MATCH_SLIDER_MAX)
         val config = _uiState.value.matchConfig.copy(threshold = threshold)

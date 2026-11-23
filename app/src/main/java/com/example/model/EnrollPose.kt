@@ -1,7 +1,7 @@
 package com.example.model
 
 /**
- * Guided enrollment poses for ArcFace multi-template enroll.
+ * Guided enrollment poses for EdgeFace multi-template enroll.
  * Yaw/pitch signs match the existing Record Presence challenges.
  */
 enum class EnrollPose(

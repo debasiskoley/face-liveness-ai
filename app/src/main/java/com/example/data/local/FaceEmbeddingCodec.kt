@@ -3,7 +3,7 @@ package com.example.data.local
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Packs ArcFace float embeddings into Room BLOB columns. */
+/** Packs EdgeFace float embeddings into Realm BLOB columns. */
 object FaceEmbeddingCodec {
     fun encode(values: List<Float>): ByteArray {
         val buffer = ByteBuffer.allocate(values.size * Float.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN)

@@ -18,5 +18,5 @@ Third-party components (see also README.md):
 - MiniFASNetV2 / Silent-Face-Anti-Spoofing (open-source) — Apache License 2.0
   https://github.com/minivision-ai/Silent-Face-Anti-Spoofing
 
-- ArcFace ONNX weights (`w600k_mbf.onnx`) — subject to the upstream
+- EdgeFace-S ONNX weights (`edgeface_s_gamma_05.onnx`) — subject to the upstream
   model / weight license; not relicensed by this NOTICE.

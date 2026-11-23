@@ -61,7 +61,7 @@ android {
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
   androidResources {
-    noCompress += "onnx"
+    noCompress += listOf("onnx", "data")
   }
   dependenciesInfo {
     includeInApk = false

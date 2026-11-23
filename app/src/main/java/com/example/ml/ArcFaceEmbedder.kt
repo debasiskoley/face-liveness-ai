@@ -6,6 +6,7 @@ import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Process
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
@@ -32,23 +33,28 @@ import java.nio.ByteOrder
 import kotlin.math.sqrt
 
 /**
- * Offline ArcFace identity embedder using ONNX weights (`w600k_mbf.onnx`).
+ * Offline EdgeFace-S identity embedder (`edgeface_s_gamma_05.onnx`).
  *
- * Input is a 112×112 RGB face, NCHW, (pixel - 127.5) / 127.5. Output is L2-normalized 512-D.
+ * Same contract as the previous ArcFace path: 112×112 RGB, NCHW, (pixel - 127.5) / 127.5,
+ * L2-normalized 512-D. Weights live in `edgeface_s_gamma_05.onnx.data` at 64-byte alignment
+ * so 32-bit ARM does not fault while ONNX Runtime maps them.
+ * The class name is unchanged so enroll and match call sites stay put.
  * MediaPipe is not used for identity — only for liveness in the rest of the app.
  */
 class ArcFaceEmbedder private constructor(context: Context) {
 
     private val appContext = context.applicationContext
-    private val env: OrtEnvironment?
-    private val session: OrtSession?
-    private val inputName: String
-    private val nchw: Boolean
-    private val inputSize: Int
-    private val embeddingSize: Int
-    private val matchThreshold: Float
-    private val usesOnnx: Boolean
-    private val modelName: String
+    private val loadLock = Any()
+    private var env: OrtEnvironment? = null
+    private var session: OrtSession? = null
+    private var inputName: String = "input.1"
+    private var nchw: Boolean = true
+    private var inputSize: Int = FALLBACK_INPUT
+    private var embeddingSize: Int = FALLBACK_EMBED_SIZE
+    private var matchThreshold: Float = FALLBACK_MATCH_THRESHOLD
+    private var usesOnnx: Boolean = false
+    private var modelName: String = "fallback"
+    private var loadAttempted: Boolean = false
 
     private val detector by lazy {
         val options = FaceDetectorOptions.Builder()
@@ -59,26 +65,38 @@ class ArcFaceEmbedder private constructor(context: Context) {
         FaceDetection.getClient(options)
     }
 
-    init {
-        val loaded = loadOnnx(appContext)
-        env = loaded?.env
-        session = loaded?.session
-        inputName = loaded?.inputName ?: "input.1"
-        nchw = loaded?.nchw ?: true
-        inputSize = loaded?.inputSize ?: FALLBACK_INPUT
-        embeddingSize = loaded?.embeddingSize ?: FALLBACK_EMBED_SIZE
-        usesOnnx = session != null
-        modelName = loaded?.modelName ?: "fallback"
-        matchThreshold = if (usesOnnx) ONNX_MATCH_THRESHOLD else FALLBACK_MATCH_THRESHOLD
-        Log.i(
-            TAG,
-            "Identity embedder ready onnx=$usesOnnx model=$modelName dim=$embeddingSize input=$inputSize nchw=$nchw"
-        )
+    /**
+     * Loads EdgeFace off the activity start path. A native failure inside ONNX Runtime
+     * kills the process, so this stays off [android.app.Activity] startup.
+     */
+    fun ensureLoaded() {
+        if (loadAttempted) return
+        synchronized(loadLock) {
+            if (loadAttempted) return
+            val loaded = loadOnnx(appContext)
+            env = loaded?.env
+            session = loaded?.session
+            inputName = loaded?.inputName ?: "input.1"
+            nchw = loaded?.nchw ?: true
+            inputSize = loaded?.inputSize ?: FALLBACK_INPUT
+            embeddingSize = loaded?.embeddingSize ?: FALLBACK_EMBED_SIZE
+            usesOnnx = session != null
+            modelName = loaded?.modelName ?: "fallback"
+            matchThreshold = if (usesOnnx) ONNX_MATCH_THRESHOLD else FALLBACK_MATCH_THRESHOLD
+            loadAttempted = true
+            Log.i(
+                TAG,
+                "Identity embedder ready onnx=$usesOnnx model=$modelName dim=$embeddingSize input=$inputSize nchw=$nchw"
+            )
+        }
     }
 
     /** False when the ONNX model failed to load and embeddings come from the local fallback descriptor. */
     val isArcFaceLoaded: Boolean
-        get() = usesOnnx
+        get() {
+            ensureLoaded()
+            return usesOnnx
+        }
 
     data class FaceEmbedding(
         val vector: BiometricVector,
@@ -86,6 +104,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
     )
 
     suspend fun embedFace(bitmap: Bitmap): FaceEmbedding? = withContext(Dispatchers.Default) {
+        ensureLoaded()
         val software = softwareBitmap(bitmap) ?: return@withContext null
         val scaled = downscaleForDetect(software)
         val aligned = alignDetectedFace(scaled) ?: return@withContext null
@@ -100,6 +119,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
         faceBox: RectF? = null,
         meshPoints: List<PointF> = emptyList()
     ): BiometricVector? {
+        ensureLoaded()
         val aligned = cropFace(crop, faceBox, inputSize) ?: return null
         return embedCrop(aligned)
     }
@@ -127,6 +147,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
         meshPoints: List<PointF> = emptyList(),
         threshold: Float? = null
     ): IdentityMatchResult = withContext(Dispatchers.Default) {
+        ensureLoaded()
         val templates = profiles.filter { BiometricVector.isIdentityTemplate(it.vector) }
         if (templates.isEmpty()) {
             return@withContext IdentityMatchResult(
@@ -139,7 +160,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
             )
         }
 
-        // Same ML Kit + ArcFace path as enrollment. Also try a mirrored crop so
+        // Same ML Kit + EdgeFace path as enrollment. Also try a mirrored crop so
         // front-camera selfies still match CameraX live frames.
         val liveVector = embedFromBitmap(liveBitmap)
             ?: return@withContext IdentityMatchResult(statusLabel = "Live face not clear")
@@ -167,7 +188,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
             }
         }
 
-        // A server threshold is calibrated for ArcFace cosine scores, not the fallback descriptor.
+        // A caller threshold is calibrated for EdgeFace cosine scores, not the fallback descriptor.
         val effectiveThreshold = if (usesOnnx && threshold != null) threshold else matchThreshold
         val isMatch = best != null && bestScore >= effectiveThreshold
         val percent = ((bestScore.coerceIn(0f, 1f)) * 100).toInt()
@@ -230,7 +251,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
                 }
             }
         } catch (t: Throwable) {
-            Log.w(TAG, "ONNX ArcFace inference failed", t)
+            Log.w(TAG, "ONNX EdgeFace inference failed", t)
             null
         }
     }
@@ -308,9 +329,11 @@ class ArcFaceEmbedder private constructor(context: Context) {
     )
 
     companion object {
-        private const val TAG = "ArcFaceEmbedder"
-        const val MODEL_MBF = "w600k_mbf.onnx"
-        const val EMBEDDING_MODEL = "arcface-w600k_mbf"
+        private const val TAG = "EdgeFaceEmbedder"
+        const val MODEL_ASSET = "edgeface_s_gamma_05.onnx"
+        /** Weights stored beside the graph so 32-bit ARM can map them on an aligned address. */
+        const val MODEL_DATA = "edgeface_s_gamma_05.onnx.data"
+        const val EMBEDDING_MODEL = "edgeface-s"
         const val MIN_TEMPLATE_SIZE = 128
         private const val FALLBACK_INPUT = 112
         private const val GRID = 8
@@ -379,23 +402,41 @@ class ArcFaceEmbedder private constructor(context: Context) {
             return Bitmap.createScaledBitmap(cropped, outSize, outSize, true)
         }
 
+        /**
+         * 32-bit ARM faults (SIGBUS) if ONNX Runtime graph-optimizes EdgeFace in place.
+         * Skip those rewrites and the CPU arena on that ABI. 64-bit keeps full optimization.
+         * The session is opened from the aligned `.onnx.data` file; a byte[] copy cannot
+         * see those external weights.
+         */
+        private fun sessionOptions(): OrtSession.SessionOptions {
+            val arm32 = !Process.is64Bit()
+            return OrtSession.SessionOptions().apply {
+                setIntraOpNumThreads(if (arm32) 1 else 2)
+                if (arm32) {
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+                    setCPUArenaAllocator(false)
+                    setMemoryPatternOptimization(false)
+                    addConfigEntry("session.disable_prepacking", "1")
+                } else {
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                }
+            }
+        }
+
         private fun loadOnnx(context: Context): LoadedOnnx? {
             val assetName = pickModelAsset(context) ?: run {
-                Log.i(TAG, "No ArcFace ONNX in assets ($MODEL_MBF)")
+                Log.i(TAG, "No EdgeFace ONNX in assets ($MODEL_ASSET)")
                 return null
             }
             return try {
                 val modelFile = copyAssetToFiles(context, assetName)
+                copyAssetToFiles(context, MODEL_DATA)
                 val env = OrtEnvironment.getEnvironment()
-                val options = OrtSession.SessionOptions().apply {
-                    setIntraOpNumThreads(2)
-                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                }
-                val session = env.createSession(modelFile.absolutePath, options)
+                val session = env.createSession(modelFile.absolutePath, sessionOptions())
                 val inName = session.inputNames.first()
                 val inInfo = session.inputInfo[inName]?.info as? TensorInfo
                 val inShape = inInfo?.shape ?: longArrayOf(1, 3, 112, 112)
-                // w600k_* ArcFace is always NCHW RGB 112. Dynamic dims can look like -1/0.
+                // EdgeFace-S is NCHW RGB 112. Dynamic dims can look like -1/0.
                 val nchw = !(inShape.size >= 4 && inShape[3] == 3L && inShape[1] != 3L)
                 val size = 112
                 val outName = session.outputNames.first()
@@ -404,15 +445,15 @@ class ArcFaceEmbedder private constructor(context: Context) {
                 Log.i(TAG, "Loaded $assetName in=$inName shape=${inShape.contentToString()} out=$outName dim=$dim nchw=$nchw")
                 LoadedOnnx(env, session, inName, nchw, size, dim, assetName)
             } catch (t: Throwable) {
-                Log.i(TAG, "ONNX ArcFace load failed for $assetName; using crop descriptor", t)
+                Log.i(TAG, "ONNX EdgeFace load failed for $assetName; using crop descriptor", t)
                 null
             }
         }
 
         private fun pickModelAsset(context: Context): String? {
             return try {
-                context.assets.open(MODEL_MBF).use { /* exists */ }
-                MODEL_MBF
+                context.assets.open(MODEL_ASSET).use { /* exists */ }
+                MODEL_ASSET
             } catch (_: Exception) {
                 null
             }
@@ -427,7 +468,7 @@ class ArcFaceEmbedder private constructor(context: Context) {
             } catch (_: Exception) {
                 -1L
             }
-            if (out.exists() && out.length() > 1_000_000L && (expected < 0L || out.length() == expected)) {
+            if (out.exists() && expected > 0L && out.length() == expected) {
                 return out
             }
             context.assets.open(assetName).use { input ->

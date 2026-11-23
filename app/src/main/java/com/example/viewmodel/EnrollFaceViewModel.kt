@@ -139,7 +139,7 @@ class EnrollFaceViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    /** Capture ArcFace template for the current guided pose, then advance. */
+    /** Capture an EdgeFace template for the current guided pose, then advance. */
     fun captureCurrentPose() {
         val state = _uiState.value
         if (!state.canCapturePose) {
@@ -228,7 +228,7 @@ class EnrollFaceViewModel(application: Application) : AndroidViewModel(applicati
     private suspend fun buildPoseTemplate(pose: EnrollPose, frame: Bitmap): CapturedPoseTemplate {
         val embedder = withContext(Dispatchers.Default) { embedder }
         check(embedder.isArcFaceLoaded) {
-            "ArcFace model is not loaded, so a 512-D face embedding cannot be created."
+            "EdgeFace model is not loaded, so a 512-D face embedding cannot be created."
         }
         val face = embedder.embedFace(frame)
             ?: throw IllegalStateException("Face not clear for ${pose.title}. Adjust and try again.")
