@@ -173,7 +173,10 @@ class MediaPipeFaceLandmarkerHelper(
             val yawDeg = ((noseTip.x() - eyeMidX) / eyeDist) * 90f
 
             val mouthMidY = (mouthLeft.y() + mouthRight.y()) / 2f
-            val pitchDeg = ((noseTip.y() - ((leftEye.y() + mouthMidY) / 2f)) / eyeDist) * 75f
+            // Image Y grows downward, so a chin-down tilt increases nose Y and would
+            // otherwise read as positive. Negate so pitch matches FaceMetrics:
+            // looking up > 0, looking down < 0.
+            val pitchDeg = -((noseTip.y() - ((leftEye.y() + mouthMidY) / 2f)) / eyeDist) * 75f
 
             // Eye aspect ratio (EAR) from lid landmarks — backup when blendshapes lag.
             val leftEar = eyeAspectRatio(landmarks, 33, 133, 159, 145)
